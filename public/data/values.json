@@ -1,8 +1,62 @@
 [
-  { "areaId": "area-1", "value": 28, "color": [34, 197, 94],  "label": "Normale" },
-  { "areaId": "area-2", "value": 71, "color": [245, 158, 11], "label": "Vëmendje" },
-  { "areaId": "area-3", "value": 34, "color": [34, 197, 94],  "label": "Normale" },
-  { "areaId": "area-4", "value": 19, "color": [34, 197, 94],  "label": "Normale" },
-  { "areaId": "area-5", "value": 92, "color": [239, 68, 68],  "label": "Kritike" },
-  { "areaId": "area-6", "value": 47, "color": [245, 158, 11], "label": "Vëmendje" }
+  {
+    "areaId": "area-1",
+    "value": 55,
+    "color": [
+      245,
+      158,
+      11
+    ],
+    "label": "Vëmendje"
+  },
+  {
+    "areaId": "area-2",
+    "value": 57,
+    "color": [
+      245,
+      158,
+      11
+    ],
+    "label": "Vëmendje"
+  },
+  {
+    "areaId": "area-3",
+    "value": 63,
+    "color": [
+      245,
+      158,
+      11
+    ],
+    "label": "Vëmendje"
+  },
+  {
+    "areaId": "area-4",
+    "value": 58,
+    "color": [
+      245,
+      158,
+      11
+    ],
+    "label": "Vëmendje"
+  },
+  {
+    "areaId": "area-5",
+    "value": 54,
+    "color": [
+      245,
+      158,
+      11
+    ],
+    "label": "Vëmendje"
+  },
+  {
+    "areaId": "area-6",
+    "value": 58,
+    "color": [
+      245,
+      158,
+      11
+    ],
+    "label": "Vëmendje"
+  }
 ]

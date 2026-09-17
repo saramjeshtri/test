@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "fusion:run": "tsx scripts/run-fusion.ts",
-    "fusion:test-llm": "tsx scripts/test-llm-fallback.ts"
+    "fusion:test-llm": "tsx scripts/test-llm-fallback.ts",
+    "fusion:sync-map": "npm run fusion:run && tsx scripts/sync-map-values.ts"
   },
   "dependencies": {
     "cesium": "^1.145.0",
