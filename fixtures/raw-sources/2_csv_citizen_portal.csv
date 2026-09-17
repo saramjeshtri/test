@@ -1,0 +1,15 @@
+request_id,full_name,neighborhood,issue_type,notes,submitted_on,current_status,urgency,dept
+CP-0015,Ermira Cara,District 1,Other,Signage issue,2026-04-08,Resolved,High,Shërbime të Përgjithshme
+CP-0016,Manjola Prifti,District 3,Waste Collection,Overflowing waste container,2026-04-09,In Progress,High,Higjiena Publike
+CP-0017,Ardit Basha,District 2,Other,Noise complaint,2026-04-26,Open,Medium,Shërbime të Përgjithshme
+CP-0018,Arben Kola,District 2,Green Spaces,Damage to the flower garden,2026-02-10,Open,Medium,Mjedis
+CP-0019,Gentian Kastrati,District 3,Public Lighting,Streetlight not working,2026-05-26,Resolved,Medium,Punë Publike
+CP-0020,Silva Leka,District 1,Green Spaces,Fallen tree in the park,2026-01-26,Resolved,Low,Mjedis
+CP-0021,Flamur Gjini,District 6,Waste Collection,Overflowing waste container,2025-12-21,Open,Medium,Higjiena Publike
+CP-0022,Miranda Meta,District 6,Water/Sewage,Sewage system blockage,2026-04-13,Open,Low,Ujësjellës Kanalizime
+CP-0023,Donika Shehu,District 1,Green Spaces,Damage to the flower garden,2026-05-28,Resolved,Low,Mjedis
+CP-0024,Shpëtim Duka,District 1,Roads,Road blocked by landslide debris,2025-12-26,Resolved,Low,Punë Publike
+CP-0025,Dritan Duka,District 2,Other,Signage issue,2026-02-14,In Progress,Low,Shërbime të Përgjithshme
+CP-0026,Besart Kola,District 2,Other,Noise complaint,2026-06-02,Resolved,Low,Shërbime të Përgjithshme
+CP-0027,Flamur Bushati,District 5,Other,Noise complaint,2026-04-27,Open,Low,Shërbime të Përgjithshme
+CP-0028,Enkelejda Kola,District 5,Public Lighting,Burnt-out lamp in the square,2026-05-27,In Progress,High,Punë Publike
