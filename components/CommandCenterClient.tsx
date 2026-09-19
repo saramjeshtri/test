@@ -1,130 +1,197 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { MapPin, TrendingUp, Search, ArrowRight } from "lucide-react";
 import type { CommandCenterData } from "@/lib/commandCenter/aggregate";
+import type { CityMapHandle } from "./CityMap";
+import KpiStrip from "./command-center/KpiStrip";
+import Panel from "./command-center/Panel";
+import ZoneList from "./command-center/ZoneList";
+import AttentionCard, { topPriorityZone } from "./command-center/AttentionCard";
+import AskBusulla from "./command-center/AskBusulla";
 import TrendChart from "./command-center/TrendChart";
 import EvidencePanel from "./command-center/EvidencePanel";
+import { MapInstrument, MapSearch, ModeSwitch } from "./command-center/MapChrome";
+import SidebarTabs, { type SidebarTabId } from "./command-center/SidebarTabs";
+import { severityDomain } from "@/lib/commandCenter/severityColor";
+import { onHomeAction } from "@/lib/commandCenter/uiEvents";
 
 const CityMap = dynamic(() => import("./CityMap"), { ssr: false });
 
-// Deliberately not Intl.NumberFormat: its thousands-separator output for
-// "sq-AL" differs between Node's ICU (SSR) and the browser's ICU (client),
-// which causes a hydration mismatch. A fixed manual format avoids that.
-function formatLeke(n: number): string {
-  return n.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ",") + " L";
-}
+export default function CommandCenterClient({
+  data,
+  initialZone = null,
+  initialTab = "trend",
+}: {
+  data: CommandCenterData;
+  initialZone?: string | null;
+  initialTab?: SidebarTabId;
+}) {
+  const [selectedZone, setSelectedZone] = useState<string | null>(initialZone);
+  // A link with ?zone= (e.g. from the Analitika table) lands here; follow it when the URL changes without remounting the map.
+  const [seenInitialZone, setSeenInitialZone] = useState(initialZone);
+  if (initialZone !== seenInitialZone) {
+    setSeenInitialZone(initialZone);
+    if (initialZone) setSelectedZone(initialZone);
+  }
+  const [seenInitialTab, setSeenInitialTab] = useState(initialTab);
+  const [mode, setMode] = useState<"3d" | "map">("3d");
+  const [spinning, setSpinning] = useState(false);
+  const [sidebarTab, setSidebarTab] = useState<SidebarTabId>(initialTab);
+  const mapRef = useRef<CityMapHandle>(null);
+  // The header search links here with ?tab= to open a hidden part of the sidebar.
+  if (initialTab !== seenInitialTab) {
+    setSeenInitialTab(initialTab);
+    setSidebarTab(initialTab);
+  }
 
-function severityColor(score: number): string {
-  if (score >= 75) return "#f87171";
-  if (score >= 50) return "#fbbf24";
-  return "#4ade80";
-}
 
-export default function CommandCenterClient({ data }: { data: CommandCenterData }) {
-  const [selectedZone, setSelectedZone] = useState<string | null>(null);
+  // The header search steers this page in place when it's already open.
+  useEffect(
+    () =>
+      onHomeAction(({ zone, tab }) => {
+        if (zone) setSelectedZone(zone);
+        if (tab) setSidebarTab(tab);
+      }),
+    []
+  );
+
+  const toggleZone = (zoneId: string) => {
+    setSelectedZone((current) => (current === zoneId ? null : zoneId));
+  };
+
+  const domain = severityDomain(data.zones.map((z) => z.severityScore));
+  const topZone = topPriorityZone(data.zones);
 
   return (
-    <div className="relative w-full h-screen bg-black overflow-hidden">
-      <div className="absolute inset-0">
-        <CityMap />
-      </div>
+    <div className="min-h-full lg:h-full w-full flex flex-col gap-4">
+      <KpiStrip data={data} />
 
-      {/* HUD overlay: pointer-events-none on the wrapper so the 3D map stays
-          interactive in the empty center; each panel re-enables pointer
-          events for itself. */}
-      <div className="absolute inset-0 pointer-events-none flex flex-col">
-        <header className="pointer-events-auto m-3 mb-0 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/10 bg-[rgba(11,15,21,0.88)] px-4 py-2.5 backdrop-blur-sm">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <h1 className="text-sm font-semibold tracking-wide text-white">Elbasan Command Center</h1>
+      {/* Three clear regions -- zones | map | attention+trend/evidence -- each staying
+          mostly within its own column, rather than floating cards stacked
+          over the map. The map itself stays large and uninterrupted; only
+          its own small controls (search, mode switch, compass/zoom, and Ask Busulla)
+          sit on top of it. */}
+      <div className="flex-1 flex flex-col lg:flex-row lg:items-start gap-4 lg:min-h-0">
+        <aside className="bc-stagger order-2 lg:order-none w-full lg:w-[280px] shrink-0 lg:self-stretch lg:overflow-y-auto flex flex-col gap-4 lg:min-h-0">
+          <Panel
+            title="Zonat"
+            icon={<MapPin size={14} style={{ color: "var(--bc-forest)" }} />}
+            className="flex-1 min-h-[180px]"
+            bodyClassName="p-0 overflow-y-auto"
+          >
+            <ZoneList zones={data.zones} selectedZone={selectedZone} onSelect={toggleZone} />
+          </Panel>
+        </aside>
+
+        <div
+          className="@container bc-rise order-1 lg:order-none h-[70dvh] lg:h-auto lg:flex-1 lg:self-stretch relative rounded-[14px] overflow-hidden border lg:min-h-0"
+          style={{ borderColor: "var(--bc-border)", boxShadow: "var(--bc-shadow)", animationDelay: "60ms" }}
+        >
+          <CityMap
+            ref={mapRef}
+            focusZone={selectedZone}
+            onFocusChange={setSelectedZone}
+            hideChrome
+            onModeChange={setMode}
+            onSpinningChange={setSpinning}
+          />
+
+          <MapSearch
+            zones={data.zones.map((z) => ({ zoneId: z.zoneId, label: z.zoneLabel }))}
+            searchPlaces={(q) => mapRef.current?.searchPlaces(q) ?? []}
+            onPickZone={setSelectedZone}
+            onPickPlace={(place) => mapRef.current?.flyToPlace(place)}
+            onClear={() => mapRef.current?.clearPlaceMarker()}
+          />
+          <ModeSwitch mode={mode} onSwitchMode={(m) => mapRef.current?.switchMode(m)} />
+          <MapInstrument
+            onResetNorth={() => mapRef.current?.resetNorth()}
+            getHeading={() => mapRef.current?.getHeading() ?? 0}
+            onNudge={(patch) => mapRef.current?.nudge(patch)}
+            spinning={spinning}
+            onToggleSpin={() => mapRef.current?.toggleSpin()}
+          />
+
+          {/* The one deliberate exception -- a single subtle control on the
+              map, not a stack of content cards. */}
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 w-[380px] max-w-[calc(100%-32px)]">
+            <AskBusulla topZone={topZone} onAsk={(zoneId) => setSelectedZone(zoneId)} />
           </div>
-          <div className="flex items-center gap-5 text-[11px] text-white/70">
-            <span>
-              <span className="text-white font-semibold">{data.city.totalRequests}</span> kërkesa gjithsej
-            </span>
-            <span>
-              <span className="text-emerald-400 font-semibold">{data.city.resolvedPct}%</span> të zgjidhura
-            </span>
-            <span>
-              <span className="text-red-400 font-semibold">{data.city.openCount}</span> në pritje
-            </span>
-            <span>
-              Buxheti: <span className="text-white font-semibold">{formatLeke(data.city.totalSpentLeke)}</span>{" "}
-              / {formatLeke(data.city.totalBudgetLeke)}
-            </span>
-          </div>
-        </header>
-
-        <div className="flex-1 flex gap-3 p-3 min-h-0">
-          <aside className="pointer-events-auto w-[260px] flex flex-col gap-3 min-h-0">
-            <div className="rounded-xl border border-white/10 bg-[rgba(11,15,21,0.88)] p-3 max-h-[280px] overflow-y-auto">
-              <h3 className="text-[11px] font-semibold uppercase tracking-wider text-white/60 mb-2">Zonat</h3>
-              <div className="space-y-1.5">
-                {data.zones.map((z) => (
-                  <button
-                    key={z.zoneId}
-                    onClick={() => setSelectedZone(selectedZone === z.zoneId ? null : z.zoneId)}
-                    className={`w-full text-left rounded-lg border px-2.5 py-2 text-[11px] transition ${
-                      selectedZone === z.zoneId
-                        ? "border-sky-400/60 bg-sky-400/10"
-                        : "border-white/10 bg-white/[0.03] hover:bg-white/[0.06]"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium text-white/90">{z.zoneLabel}</span>
-                      <span
-                        className="text-[10px] font-semibold px-1.5 py-0.5 rounded"
-                        style={{ color: severityColor(z.severityScore) }}
-                      >
-                        {z.severityScore}
-                      </span>
-                    </div>
-                    <div className="text-white/40 mt-0.5">
-                      {z.total} kërkesa · {z.open + z.inProgress} aktive
-                      {z.budget ? ` · buxheti ${z.budget.spentPct}%` : ""}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-white/10 bg-[rgba(11,15,21,0.88)] p-3 flex-1 min-h-0 overflow-y-auto">
-              <h3 className="text-[11px] font-semibold uppercase tracking-wider text-white/60 mb-2">Sinjalizime</h3>
-              <div className="space-y-1.5">
-                {data.alerts.length === 0 && (
-                  <p className="text-[11px] text-white/30 italic">Asnjë sinjalizim.</p>
-                )}
-                {data.alerts.map((a, i) => (
-                  <div
-                    key={i}
-                    className={`rounded-lg border px-2.5 py-2 text-[11px] leading-snug ${
-                      a.severity === "critical"
-                        ? "border-red-400/30 bg-red-400/[0.07] text-red-200"
-                        : "border-amber-400/30 bg-amber-400/[0.07] text-amber-200"
-                    }`}
-                  >
-                    {a.message}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </aside>
-
-          <div className="flex-1" />
-
-          <aside className="pointer-events-auto w-[300px] flex flex-col gap-3 min-h-0">
-            <div className="rounded-xl border border-white/10 bg-[rgba(11,15,21,0.88)] p-3">
-              <h3 className="text-[11px] font-semibold uppercase tracking-wider text-white/60 mb-2">
-                Trendi mujor
-              </h3>
-              <TrendChart data={data.trend} />
-            </div>
-            <div className="rounded-xl border border-white/10 bg-[rgba(11,15,21,0.88)] p-3 flex-1 min-h-0">
-              <EvidencePanel records={data.records} selectedZone={selectedZone} />
-            </div>
-          </aside>
         </div>
+
+        <aside className="bc-stagger order-3 lg:order-none w-full lg:w-[320px] shrink-0 lg:self-stretch lg:overflow-y-auto flex flex-col gap-4 lg:min-h-0">
+          {topZone && (
+            <AttentionCard
+              zone={topZone}
+              domain={domain}
+              onViewEvidence={() => {
+                setSelectedZone(topZone.zoneId);
+                setSidebarTab("evidence");
+              }}
+            />
+          )}
+
+          <SidebarTabs
+            active={sidebarTab}
+            onChange={setSidebarTab}
+            tabs={[
+              {
+                id: "trend",
+                label: "Trendi",
+                icon: <TrendingUp size={13} />,
+                content: (
+                  <Panel
+                    title="Trendi mujor"
+                    icon={<TrendingUp size={14} style={{ color: "var(--bc-forest)" }} />}
+                    rise={false}
+                    right={
+                      <Link
+                        href="/command-center/analytics"
+                        className="inline-flex items-center gap-1 text-[11.5px] font-semibold"
+                        style={{ color: "var(--bc-forest)" }}
+                      >
+                        Analitika e plotë <ArrowRight size={12} />
+                      </Link>
+                    }
+                  >
+                    <TrendChart data={data.trend} />
+                  </Panel>
+                ),
+              },
+              {
+                id: "evidence",
+                label: "Evidencë",
+                icon: <Search size={13} />,
+                content: (
+                  <Panel
+                    title="Evidencë"
+                    icon={<Search size={14} style={{ color: "var(--bc-forest)" }} />}
+                    className="flex-1 min-h-0"
+                    rise={false}
+                    right={
+                      <Link
+                        href="/command-center/requests"
+                        className="inline-flex items-center gap-1 text-[11.5px] font-semibold"
+                        style={{ color: "var(--bc-forest)" }}
+                      >
+                        Të gjitha kërkesat <ArrowRight size={12} />
+                      </Link>
+                    }
+                  >
+                    <EvidencePanel
+                      records={data.records}
+                      selectedZone={selectedZone}
+                      onHoverZone={(zoneId) => mapRef.current?.highlightZone(zoneId)}
+                    />
+                  </Panel>
+                ),
+              },
+            ]}
+          />
+        </aside>
       </div>
     </div>
   );

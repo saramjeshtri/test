@@ -22,13 +22,6 @@ export interface TrendPoint {
   count: number;
 }
 
-export interface Alert {
-  zoneId: string;
-  zoneLabel: string;
-  severity: "warning" | "critical";
-  message: string;
-}
-
 export interface CommandCenterData {
   generatedAt: string;
   city: {
@@ -40,7 +33,6 @@ export interface CommandCenterData {
   };
   zones: ZoneStats[];
   trend: TrendPoint[];
-  alerts: Alert[];
   records: CanonicalRequest[];
 }
 
@@ -134,33 +126,6 @@ export function loadCommandCenterData(): CommandCenterData {
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([month, count]) => ({ month, count }));
 
-  const alerts: Alert[] = [];
-  for (const z of zones) {
-    if (z.severityScore >= 75) {
-      alerts.push({
-        zoneId: z.zoneId,
-        zoneLabel: z.zoneLabel,
-        severity: "critical",
-        message: `${z.zoneLabel}: high backlog pressure -- ${z.open + z.inProgress} of ${z.total} requests still open or in progress, ${z.budget?.spentPct ?? "?"}% of budget already spent.`,
-      });
-    } else if (z.severityScore >= 50) {
-      alerts.push({
-        zoneId: z.zoneId,
-        zoneLabel: z.zoneLabel,
-        severity: "warning",
-        message: `${z.zoneLabel}: rising backlog -- ${z.open + z.inProgress} of ${z.total} requests still open or in progress.`,
-      });
-    }
-    if (z.budget && z.budget.spentPct >= 80 && z.severityScore < 75) {
-      alerts.push({
-        zoneId: z.zoneId,
-        zoneLabel: z.zoneLabel,
-        severity: "warning",
-        message: `${z.zoneLabel}: ${z.budget.spentPct}% of annual budget already spent.`,
-      });
-    }
-  }
-
   return {
     generatedAt: new Date().toISOString(),
     city: {
@@ -172,7 +137,6 @@ export function loadCommandCenterData(): CommandCenterData {
     },
     zones,
     trend,
-    alerts,
     records,
   };
 }

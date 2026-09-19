@@ -10,16 +10,19 @@
 import fs from "node:fs";
 import path from "node:path";
 import { computeZoneStats } from "../lib/commandCenter/aggregate";
+import { severityToRgb, severityLabel, severityDomain } from "../lib/commandCenter/severityColor";
 import type { CanonicalRequest } from "../lib/fusion/schema";
 import type { CanonicalBudgetRow } from "../lib/fusion/parsers/budgetParser";
 
 const OUT_DIR = path.join(process.cwd(), "fixtures/canonical-output");
 const VALUES_PATH = path.join(process.cwd(), "public/data/values.json");
 
-function colorAndLabelFor(score: number): { color: number[]; label: string } {
-  if (score >= 75) return { color: [239, 68, 68], label: "Kritike" };
-  if (score >= 50) return { color: [245, 158, 11], label: "Vëmendje" };
-  return { color: [34, 197, 94], label: "Normale" };
+// Continuous gradient (forest -> brown -> critical rust), shared with the
+// UI via lib/commandCenter/severityColor.ts -- a fixed 3-bucket scheme made
+// every zone in this dataset look the same color, since all six current
+// severity scores land in the same middle bucket.
+function colorAndLabelFor(score: number, domain: [number, number]): { color: number[]; label: string } {
+  return { color: [...severityToRgb(score, domain)], label: severityLabel(score) };
 }
 
 function main() {
@@ -31,9 +34,10 @@ function main() {
   );
 
   const zones = computeZoneStats(records, budgetRows);
+  const domain = severityDomain(zones.map((z) => z.severityScore));
 
   const values = zones.map((z) => {
-    const { color, label } = colorAndLabelFor(z.severityScore);
+    const { color, label } = colorAndLabelFor(z.severityScore, domain);
     return { areaId: z.zoneId, value: z.severityScore, color, label };
   });
 

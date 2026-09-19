@@ -20,7 +20,207 @@
 }
 
 body {
-  background: var(--background);
+  /* --bc-bg (defined below) rather than the generic template --background:
+     if any layout ever overflows h-screen, the visible gap should read as
+     "more of the app" (cream/near-black, matching the theme), not a jarring
+     unstyled black rectangle. */
+  background: var(--bc-bg, var(--background));
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* ---- Busulla design tokens (Command Center) ----
+   One system: soft page background, white cards, hairline borders, layered
+   soft shadows, 14px radius on every block and 10px on controls inside them. */
+:root {
+  --bc-bg: #F1F4EE;
+  --bc-surface: #FFFFFF;
+  --bc-surface-2: #F1F4EC;
+  --bc-border: #E2E8DA;
+  --bc-text: #1E2A1A;
+  --bc-text-secondary: #647060;
+
+  --bc-forest: #2D6A3B;
+  --bc-forest-tint: #E4F0E2;
+  --bc-brown: #8B7355;
+  --bc-teal: #3F8FA6;
+  --bc-critical: #C4483B;
+  --bc-critical-tint: #FBE9E6;
+
+  /* Chart status colors -- checked with the dataviz validator so green / amber /
+     red stay distinguishable for colour-blind readers (labels + legend + table view backstop them). */
+  --bc-st-resolved: #2F8F4E;
+  --bc-st-progress: #D9A017;
+  --bc-st-open: #C4483B;
+
+  --bc-map-card-bg: rgba(23, 27, 22, 0.92);
+
+  /* Motion: crisp, not bouncy -- a dashboard is used all day (Emil Kowalski's
+     rule: UI stays under 300ms, ease-out for anything entering). */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+
+  --bc-radius: 14px;
+  --bc-radius-sm: 10px;
+  --bc-shadow: 0 1px 2px rgba(24, 40, 20, 0.05), 0 10px 28px -12px rgba(24, 40, 20, 0.14);
+  --bc-shadow-float: 0 2px 6px rgba(24, 40, 20, 0.08), 0 14px 32px -10px rgba(24, 40, 20, 0.22);
+
+  /* aliases used by Panel / lists */
+  --bc-panel: var(--bc-surface);
+  --bc-panel-hover: #F5F8F1;
+  --bc-panel-active: var(--bc-forest-tint);
+}
+
+/* The blueprint is texture, not content: keep it calm so the cards read first. */
+.bc-city-blueprint {
+  opacity: 0.09;
+}
+[data-theme="dark"] .bc-city-blueprint {
+  opacity: 0.07;
+}
+
+/* Instrument-style numeric readouts -- monospace + tabular figures so
+   digits line up, used for every real data value (counts, %, scores,
+   timestamps) instead of the body font. */
+.bc-mono {
+  font-family: var(--font-geist-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+[data-theme="dark"] {
+  --bc-bg: #0F130E;
+  --bc-surface: #171C16;
+  --bc-surface-2: #1F261E;
+  --bc-border: #263024;
+  --bc-text: #EDF0E6;
+  --bc-text-secondary: #99A392;
+
+  --bc-forest: #6FAE55;
+  --bc-forest-tint: rgba(111, 174, 85, 0.16);
+  --bc-brown: #B39A76;
+  --bc-teal: #5FA6BA;
+  --bc-critical: #E0705F;
+  --bc-critical-tint: rgba(224, 112, 95, 0.16);
+
+  --bc-st-resolved: #3BAA65;
+  --bc-st-progress: #D0961B;
+  --bc-st-open: #E0584A;
+
+  --bc-map-card-bg: rgba(23, 27, 22, 0.92);
+
+  --bc-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 30px -14px rgba(0, 0, 0, 0.6);
+  --bc-shadow-float: 0 2px 6px rgba(0, 0, 0, 0.35), 0 16px 34px -10px rgba(0, 0, 0, 0.65);
+
+  --bc-panel-hover: #1C231B;
+}
+
+/* Frosted-glass surface for everything that floats over the map. */
+.bc-glass {
+  background: color-mix(in srgb, var(--bc-surface) 78%, transparent);
+  -webkit-backdrop-filter: blur(12px) saturate(1.3);
+  backdrop-filter: blur(12px) saturate(1.3);
+  border: 1px solid color-mix(in srgb, var(--bc-border) 75%, transparent);
+  box-shadow: var(--bc-shadow-float);
+}
+
+/* Segmented controls (tabs, 3D/2D, theme): one recessed track, one raised pill. */
+.bc-seg-track {
+  background: var(--bc-surface-2);
+  border-radius: 12px;
+  padding: 3px;
+}
+.bc-seg-pill {
+  background: var(--bc-surface);
+  color: var(--bc-forest);
+  box-shadow: 0 1px 2px rgba(24, 40, 20, 0.12), 0 1px 6px rgba(24, 40, 20, 0.06);
+}
+[data-theme="dark"] .bc-seg-pill {
+  background: #2A3328;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+/* Entrance: one short ease-out rise, staggered 50ms down each column so the
+   page assembles instead of everything popping at once. */
+@keyframes bc-rise {
+  from { opacity: 0; transform: translateY(8px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes bc-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.bc-rise {
+  animation: bc-rise 280ms var(--ease-out) both;
+}
+.bc-stagger > :nth-child(2) { animation-delay: 50ms; }
+.bc-stagger > :nth-child(3) { animation-delay: 100ms; }
+.bc-stagger > :nth-child(4) { animation-delay: 150ms; }
+
+/* Dropdown content: comes from its trigger (top), fast. */
+@keyframes bc-pop {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+.bc-pop {
+  transform-origin: top;
+  animation: bc-pop 180ms var(--ease-out) both;
+}
+
+/* Progress bars wipe in left-to-right (clip-path, no layout work). */
+@keyframes bc-reveal {
+  from { clip-path: inset(0 100% 0 0 round 999px); }
+  to { clip-path: inset(0 0 0 0 round 999px); }
+}
+.bc-reveal {
+  animation: bc-reveal 320ms var(--ease-out) both;
+}
+
+/* Press feedback on compact controls (opt-in: full-width list rows shouldn't shrink). */
+.bc-press {
+  transition-property: transform, background-color, color, box-shadow;
+  transition-duration: 140ms;
+  transition-timing-function: var(--ease-out);
+}
+.bc-press:not(:disabled):active {
+  transform: scale(0.96);
+}
+
+/* Reduced motion: keep the gentle fades that aid comprehension, drop movement. */
+@media (prefers-reduced-motion: reduce) {
+  .bc-rise { animation: bc-fade 200ms ease both; }
+  .bc-pop { animation: bc-fade 120ms ease both; }
+  .bc-reveal { animation: none; }
+  .bc-press:not(:disabled):active { transform: none; }
+  .animate-ping { animation: none; }
+}
+
+/* Soft color washes behind the blueprint so the page has depth, not a flat fill. */
+.bc-glow {
+  background:
+    radial-gradient(900px 520px at 6% -8%, color-mix(in srgb, var(--bc-forest) 14%, transparent), transparent 70%),
+    radial-gradient(800px 480px at 100% 4%, color-mix(in srgb, var(--bc-forest) 9%, transparent), transparent 70%),
+    radial-gradient(900px 500px at 50% 112%, color-mix(in srgb, var(--bc-forest) 7%, transparent), transparent 70%);
+}
+
+/* Thin, quiet scrollbars that match the cards. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--bc-text-secondary) 35%, transparent) transparent;
+}
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--bc-text-secondary) 35%, transparent);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+/* Keyboard focus that's visible but on-brand. */
+button:focus-visible, input:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--bc-forest) 70%, transparent);
+  outline-offset: 2px;
+}
+
+/* A section the header search just scrolled to: a soft green ring that fades out again. */
+.bc-anchor { transition: box-shadow 500ms var(--ease-out); }
+.bc-anchor.bc-flash { box-shadow: 0 0 0 3px color-mix(in srgb, var(--bc-forest) 55%, transparent), var(--bc-shadow) !important; }

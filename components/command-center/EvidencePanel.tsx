@@ -1,40 +1,43 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { Search } from "lucide-react";
 import type { CanonicalRequest } from "@/lib/fusion/schema";
-import { STATUS_ALIASES, CATEGORY_ALIASES } from "@/lib/fusion/dictionaries";
+import { STATUS_LABEL, CATEGORY_LABEL, SOURCE_SHORT } from "@/lib/commandCenter/labels";
 
-const STATUS_LABEL: Record<string, string> = Object.fromEntries(
-  Object.entries(STATUS_ALIASES).map(([k, v]) => [k, v[0]])
-);
-const CATEGORY_LABEL: Record<string, string> = Object.fromEntries(
-  Object.entries(CATEGORY_ALIASES).map(([k, v]) => [k, v[0]])
-);
-
-const STATUS_DOT: Record<string, string> = {
-  resolved: "bg-emerald-400",
-  in_progress: "bg-amber-400",
-  open: "bg-red-400",
-};
-
-const SOURCE_SHORT: Record<string, string> = {
-  "1_excel_drejtoria_infrastruktures.xlsx": "Excel · Infrastrukturë",
-  "2_csv_citizen_portal.csv": "CSV · Portali i Qytetarit",
-  "3_pdf_raport_mujor_sherbime.pdf": "PDF · Raport Mujor",
-  "4_legacy_munsys_export.txt": "Legacy · MUNSYS",
+const STATUS_COLOR: Record<string, string> = {
+  resolved: "var(--bc-st-resolved)",
+  in_progress: "var(--bc-st-progress)",
+  open: "var(--bc-st-open)",
 };
 
 export default function EvidencePanel({
   records,
   selectedZone,
+  onHoverZone,
+  query: controlledQuery,
+  onQueryChange,
 }: {
   records: CanonicalRequest[];
   selectedZone: string | null;
+  /** Optional: lets the header search drive this box. Falls back to local state. */
+  query?: string;
+  onQueryChange?: (q: string) => void;
+  /** Hovering a row highlights that record's zone on the map -- the row
+   *  itself doesn't move the camera, just draws the connection. */
+  onHoverZone?: (zoneId: string | null) => void;
 }) {
-  const [query, setQuery] = useState("");
+  const [localQuery, setLocalQuery] = useState("");
+  const query = controlledQuery ?? localQuery;
+  const setQuery = onQueryChange ?? setLocalQuery;
+
+  const zoneRecords = useMemo(
+    () => (selectedZone ? records.filter((r) => r.zone_id === selectedZone) : records),
+    [records, selectedZone]
+  );
 
   const filtered = useMemo(() => {
-    let list = selectedZone ? records.filter((r) => r.zone_id === selectedZone) : records;
+    let list = zoneRecords;
     if (query.trim()) {
       const q = query.trim().toLowerCase();
       list = list.filter(
@@ -45,47 +48,62 @@ export default function EvidencePanel({
       );
     }
     return list.slice(0, 40);
-  }, [records, selectedZone, query]);
+  }, [zoneRecords, query]);
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      <div className="flex items-center justify-between mb-2">
-        <h3 className="text-[11px] font-semibold uppercase tracking-wider text-white/60">
-          Evidencë {selectedZone ? `· ${selectedZone.replace("area-", "Zona ")}` : "· Të gjitha zonat"}
-        </h3>
-        <span className="text-[10px] text-white/40">{filtered.length} rreshta</span>
+      <div className="flex items-center justify-between mb-2 text-[11px]" style={{ color: "var(--bc-text-secondary)" }}>
+        <span>{selectedZone ? selectedZone.replace("area-", "Zona ") : "Të gjitha zonat"}</span>
+        <span className="bc-mono">{filtered.length} rreshta</span>
       </div>
-      <input
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="Kërko qytetar, kërkesë, ID..."
-        className="mb-2 w-full rounded-md bg-white/5 border border-white/10 px-2 py-1.5 text-[11px] text-white placeholder:text-white/30 focus:outline-none focus:border-sky-400/50"
-      />
-      <div className="flex-1 min-h-0 overflow-y-auto space-y-1.5 pr-1">
-        {filtered.map((r) => (
+
+      <div className="relative mb-2 shrink-0">
+        <Search
+          size={13}
+          className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+          style={{ color: "var(--bc-text-secondary)" }}
+        />
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Kërko qytetar, kërkesë, ID..."
+          className="w-full rounded-[10px] pl-8 pr-3 py-2 text-[11.5px] focus:outline-none"
+          style={{ background: "var(--bc-surface-2)", border: "1px solid var(--bc-border)", color: "var(--bc-text)" }}
+        />
+      </div>
+
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        {filtered.map((r, i) => (
           <div
             key={`${r.source_system}-${r.source_row_ref}`}
-            className="rounded-md border border-white/10 bg-white/[0.03] px-2.5 py-2 text-[11px] leading-snug"
+            className="py-2.5"
+            style={{ borderBottom: i < filtered.length - 1 ? "1px solid var(--bc-border)" : "none" }}
+            onMouseEnter={() => r.zone_id && onHoverZone?.(r.zone_id)}
+            onMouseLeave={() => onHoverZone?.(null)}
+            title={`${SOURCE_SHORT[r.source_system] ?? r.source_system} · ${r.source_row_ref}`}
           >
             <div className="flex items-center justify-between gap-2">
-              <span className="font-medium text-white/90 truncate">{r.citizen_name ?? "—"}</span>
-              <span className="flex items-center gap-1 shrink-0">
-                <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[r.status ?? ""] ?? "bg-white/30"}`} />
-                <span className="text-white/50">{r.status ? STATUS_LABEL[r.status] : "—"}</span>
+              <span className="text-[13px] font-semibold truncate" style={{ color: "var(--bc-text)" }}>
+                {r.citizen_name ?? "—"}
               </span>
+              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: STATUS_COLOR[r.status ?? ""] ?? "#999" }} />
             </div>
-            <div className="text-white/50 truncate">
+            <div className="text-[11px] truncate mt-0.5" style={{ color: "var(--bc-text-secondary)" }}>
               {r.category ? CATEGORY_LABEL[r.category] : "—"}
-              {r.description ? ` — ${r.description}` : ""}
+              {r.description ? ` · ${r.description}` : ""}
             </div>
-            <div className="mt-1 flex items-center justify-between text-[9.5px] text-white/30">
-              <span>{r.date_submitted ?? "pa datë"}</span>
-              <span title={r.source_row_ref}>{SOURCE_SHORT[r.source_system] ?? r.source_system}</span>
+            <div className="mt-1 flex items-center justify-between text-[9.5px] tracking-wide" style={{ color: "var(--bc-text-secondary)" }}>
+              <span className="bc-mono">{r.date_submitted ?? "pa datë"}</span>
+              <span className="font-semibold" style={{ color: STATUS_COLOR[r.status ?? ""] ?? "var(--bc-text-secondary)" }}>
+                {(r.status ? STATUS_LABEL[r.status] : "—").toUpperCase()}
+              </span>
             </div>
           </div>
         ))}
         {filtered.length === 0 && (
-          <p className="text-[11px] text-white/30 italic">Asnjë rezultat.</p>
+          <p className="text-[11px] italic" style={{ color: "var(--bc-text-secondary)" }}>
+            Asnjë rezultat.
+          </p>
         )}
       </div>
     </div>

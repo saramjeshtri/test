@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import 'cesium/Build/Cesium/Widgets/widgets.css'
 
 function centroid(feature: any): [number, number] {
@@ -14,7 +14,7 @@ function centroid(feature: any): [number, number] {
   return [x / pts.length, y / pts.length]
 }
 
-function makeCard(name: string, value: number, status: string, color: number[]) {
+function makeCard(name: string, value: number, status: string, color: number[], cardBg: string) {
   const S = 3 // draw at 3x so the card stays crisp on a Retina screen
   const w = 250
   const h = 104
@@ -26,8 +26,8 @@ function makeCard(name: string, value: number, status: string, color: number[]) 
   const c = `rgb(${color[0]},${color[1]},${color[2]})`
 
   ctx.beginPath()
-  ctx.roundRect(1, 1, w - 2, h - 2, 14)
-  ctx.fillStyle = 'rgba(11,15,21,0.88)'
+  ctx.roundRect(1, 1, w - 2, h - 2, 10)
+  ctx.fillStyle = cardBg
   ctx.fill()
   ctx.strokeStyle = c
   ctx.lineWidth = 2
@@ -66,23 +66,92 @@ const MAP_VIEW = { pitch: -89, range: 6500 }
 const LIMITS = { minPitch: -89, maxPitch: -14, minRange: 260, maxRange: 12000 }
 const MIN_ALTITUDE = 160
 
+// ---- known bad geometry in Google's mesh: a failed photogrammetry patch toward the hillside ----
+// north of Zona 2 (spiky, corrupted rooftops — a real defect in Google's own data, confirmed
+// identical whether accessed via Cesium ion or a direct Google Maps key, so no client setting or
+// clip-and-patch trick fixes the geometry itself, and the affected area turned out to be large,
+// ~900m x 1200m, not a small block). It's confined to the hillside direction, though — so instead
+// of masking it, this zone's fly-to camera is pointed south into the (fully clean) dense city.
+// heading=0 here means the CAMERA sits north of the marker looking south (per Cesium's
+// HeadingPitchRange convention, heading is measured from north toward east for the offset from
+// target to camera) — verified empirically by picking screen coordinates, not just by the docs,
+// since the first attempt (180) had this backwards and pointed straight at the defect instead.
+const ZONE_HEADING: Record<string, number> = { 'area-2': 0 }
+
 // ---- the one dial for 3D quality vs speed ----
 // 1.0 = fastest and softest · 1.5 = balanced · 2.0 = sharpest and slowest
-const SHARPNESS_3D = 2.0
+// Kept modest: on a typical laptop GPU, rendering cost scales with the square of this number.
+const SHARPNESS_3D = 1.3
 
-// ---- tile detail: relaxed when the whole city is in frame, tight once zoomed into a district ----
-// Asking for low error across the full city at once floods the tile scheduler and never settles.
-// Restricting that to whatever's actually in a close-up view lets it safely go much sharper.
-const SSE_WIDE = 8
-const SSE_CLOSE = 2
-const SSE_ENTER_CLOSE = 2200 // range below this switches to CLOSE
-const SSE_EXIT_CLOSE = 2800 // range above this switches back to WIDE (gap avoids flicker)
+// ---- tile detail: one fixed value, never changed at runtime ----
+// This used to switch between a relaxed value zoomed out and a tighter one zoomed in. That was
+// removed: writing tileset.maximumScreenSpaceError forces Cesium to synchronously redo its whole
+// tile-detail pass, which is a real hitch no matter how it's timed (debouncing it just delayed the
+// stutter to right after you stop moving instead of removing it). A single fixed value never
+// triggers that recompute at all. 8 is Cesium's own default and the value already confirmed to load
+// reliably at full-city scale; going lower helps sharpness but costs both load time and per-frame
+// render cost, which is the wrong trade for demo smoothness.
+const SSE_FIXED = 8
 
 function easeInOut(k: number) {
   return k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2
 }
 
-export default function CityMap() {
+export interface MapPlace {
+  name: string
+  kind: 'area' | 'street' | 'spot'
+  lon: number
+  lat: number
+}
+
+/** Lower-case and strip diacritics so "kerko kalane" still finds "Kalaja". */
+const fold = (t: string) => t.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()
+
+const PLACE_VIEW = { pitch: -40, range: 850, mapRange: 1100 }
+
+interface CityMapProps {
+  /** Controlled fly-to target from outside (e.g. a sidebar zone list). Omit
+   *  entirely for the plain, uncontrolled `<CityMap />` usage on the homepage
+   *  -- passing `undefined` disables this behavior rather than fighting the
+   *  map's own click-to-focus. Pass `null` to fly back to the full view. */
+  focusZone?: string | null
+  /** Fired when focus changes from *inside* the map (clicking a zone pin, or
+   *  the "full view" button) -- lets an outside sidebar stay in sync. */
+  onFocusChange?: (zoneId: string | null) => void
+  /** Hides the map's own built-in control chrome (full-view button, 3D/map
+   *  toggle, zoom/rotate cluster, hint text) so an embedding page can render
+   *  its own instead, without the two colliding. Use the `CityMapHandle` ref
+   *  to trigger the same actions from that outside UI. */
+  hideChrome?: boolean
+  onModeChange?: (mode: '3d' | 'map') => void
+  onSpinningChange?: (spinning: boolean) => void
+}
+
+export interface CityMapHandle {
+  nudge: (patch: { heading?: number; pitch?: number; range?: number }) => void
+  switchMode: (mode: '3d' | 'map') => void
+  goHome: () => void
+  toggleSpin: () => void
+  resetNorth: () => void
+  /** Visually emphasizes one zone's marker without moving the camera --
+   *  e.g. hovering a row in an evidence list. Pass null to clear. */
+  highlightZone: (zoneId: string | null) => void
+  /** Current camera heading in degrees -- lets an outside compass indicator
+   *  poll and rotate to reflect the live view, not just sit static. */
+  getHeading: () => number
+  /** Named places (villages, landmarks, streets) matching the text -- the same set drawn
+   *  as labels on the city. Accent- and case-insensitive; empty until the label file has loaded. */
+  searchPlaces: (query: string, limit?: number) => MapPlace[]
+  /** Flies to a place (3D or 2D, whichever is showing) and drops a marker on it. */
+  flyToPlace: (place: MapPlace) => void
+  /** Removes the marker left by flyToPlace. */
+  clearPlaceMarker: () => void
+}
+
+export default forwardRef<CityMapHandle, CityMapProps>(function CityMap(
+  { focusZone, onFocusChange, hideChrome, onModeChange, onSpinningChange }: CityMapProps = {},
+  ref
+) {
   const containerRef = useRef<HTMLDivElement>(null)
   const viewerRef = useRef<any>(null)
   const cesiumRef = useRef<any>(null)
@@ -93,10 +162,16 @@ export default function CityMap() {
   const dragRef = useRef<{ x: number; y: number } | null>(null)
   const animRef = useRef<any>(null)
   const zonesRef = useRef<Record<string, any>>({})
-  const sseModeRef = useRef<'wide' | 'close'>('wide')
+  const highlightedZoneRef = useRef<string | null>(null)
+  const placesRef = useRef<MapPlace[]>([])
+  const onFocusChangeRef = useRef(onFocusChange)
+  useEffect(() => {
+    onFocusChangeRef.current = onFocusChange
+  }, [onFocusChange])
 
   const [spinning, setSpinning] = useState(false)
   const [focus, setFocus] = useState<string | null>(null)
+  const [zonesReady, setZonesReady] = useState(false)
   const [mode, setMode] = useState<'3d' | 'map'>('3d')
   const spinningRef = useRef(false)
   useEffect(() => {
@@ -117,19 +192,6 @@ export default function CityMap() {
     c.pitch = Math.min(Math.max(c.pitch, LIMITS.minPitch), maxPitch)
     c.heading = ((c.heading % 360) + 360) % 360
 
-    const tileset = tilesetRef.current
-    if (tileset) {
-      if (sseModeRef.current === 'wide' && c.range < SSE_ENTER_CLOSE) {
-        sseModeRef.current = 'close'
-      } else if (sseModeRef.current === 'close' && c.range > SSE_EXIT_CLOSE) {
-        sseModeRef.current = 'wide'
-      }
-      const wantSSE = sseModeRef.current === 'close' ? SSE_CLOSE : SSE_WIDE
-      if (tileset.maximumScreenSpaceError !== wantSSE) {
-        tileset.maximumScreenSpaceError = wantSSE
-      }
-    }
-
     viewer.camera.lookAt(
       centerRef.current,
       new Cesium.HeadingPitchRange(
@@ -138,9 +200,11 @@ export default function CityMap() {
         c.range
       )
     )
+    viewer.scene.requestRender()
   }
 
-  function moveTo(targetCenter: any, pitch: number, range: number) {
+  function moveTo(targetCenter: any, pitch: number, range: number, heading?: number) {
+    const fromHeading = camRef.current.heading
     animRef.current = {
       start: performance.now(),
       duration: 1100,
@@ -150,7 +214,12 @@ export default function CityMap() {
       toPitch: pitch,
       fromRange: camRef.current.range,
       toRange: range,
+      fromHeading,
+      toHeading: heading ?? fromHeading,
     }
+    // apply() (called every frame while animRef is set) requests the render for each subsequent
+    // frame, but nothing has asked for the *first* one yet — do that here or the animation never starts.
+    viewerRef.current?.scene.requestRender()
   }
 
   function applyQuality(next: '3d' | 'map') {
@@ -171,6 +240,7 @@ export default function CityMap() {
     const Cesium = cesiumRef.current
     if (!viewer || !Cesium) return
     setMode(next)
+    onModeChange?.(next)
     if (tilesetRef.current) tilesetRef.current.show = next === '3d'
     viewer.scene.globe.show = next === 'map'
     applyQuality(next)
@@ -205,6 +275,11 @@ export default function CityMap() {
         fullscreenButton: false,
         infoBox: false,
         selectionIndicator: false,
+        // only redraw when something actually changes, instead of ~60 draws/sec even when the
+        // camera is sitting still. Since the camera here is fully custom (Cesium's own controller
+        // is disabled), every path that moves it has to explicitly ask for a redraw — see apply(),
+        // moveTo(), and the spin toggle below.
+        requestRenderMode: true,
       })
       viewerRef.current = viewer
       centerRef.current = Cesium.Cartesian3.fromDegrees(CITY.lon, CITY.lat, CITY.height)
@@ -245,7 +320,8 @@ export default function CityMap() {
         const zone = zonesRef.current[zoneId]
         if (!zone) return
         setFocus(zoneId)
-        moveTo(zone.center, ZONE_VIEW.pitch, ZONE_VIEW.range)
+        onFocusChangeRef.current?.(zoneId)
+        moveTo(zone.center, ZONE_VIEW.pitch, ZONE_VIEW.range, ZONE_HEADING[zoneId])
       }, Cesium.ScreenSpaceEventType.LEFT_CLICK)
 
       viewer.scene.preRender.addEventListener(() => {
@@ -264,6 +340,9 @@ export default function CityMap() {
           )
           camRef.current.pitch = a.fromPitch + (a.toPitch - a.fromPitch) * e
           camRef.current.range = a.fromRange + (a.toRange - a.fromRange) * e
+          // shortest-path angular lerp so a 350°→10° turn takes the short way, not the long way around
+          const headingDiff = ((a.toHeading - a.fromHeading + 540) % 360) - 180
+          camRef.current.heading = a.fromHeading + headingDiff * e
           if (k >= 1) animRef.current = null
           apply()
           return
@@ -282,10 +361,7 @@ export default function CityMap() {
         tilesetRef.current = tileset
 
         // ---- TILE DETAIL ----
-        // maximumScreenSpaceError is kept adaptive: apply() switches it between
-        // SSE_WIDE and SSE_CLOSE based on zoom, so the full-city view stays fast
-        // while a close-up district can pull in the sharpest detail available.
-        tileset.maximumScreenSpaceError = SSE_WIDE
+        tileset.maximumScreenSpaceError = SSE_FIXED
         tileset.dynamicScreenSpaceError = false
         tileset.foveatedScreenSpaceError = false
         tileset.preferLeaves = false
@@ -303,6 +379,19 @@ export default function CityMap() {
       if (cancelled) return
 
       const valueById = new Map(values.map((v: any) => [v.areaId, v]))
+      // Static (not animated -- the viewer only re-renders on demand, see
+      // requestRenderMode above) halo under the single highest-severity
+      // zone's marker, so priority is visible on the map itself, not just
+      // in the sidebar.
+      const maxValue = Math.max(...values.map((v: any) => v.value))
+
+      // Read once at creation, not reactively -- matches the map card's dark
+      // background against the current theme without needing to regenerate
+      // every billboard on every theme toggle. Dark mode gets a lighter
+      // charcoal than light mode's near-black, so the label still reads as
+      // "a panel sitting on the map" rather than a void in either theme.
+      const isDarkTheme = document.documentElement.getAttribute('data-theme') === 'dark'
+      const cardBg = isDarkTheme ? 'rgba(39,45,37,0.94)' : 'rgba(23,27,22,0.92)'
 
       for (const feature of areas.features) {
         const v: any = valueById.get(feature.properties.id)
@@ -332,6 +421,21 @@ export default function CityMap() {
           },
         })
 
+        if (v.value === maxValue) {
+          viewer.entities.add({
+            id: `${id}-halo`,
+            position: Cesium.Cartesian3.fromDegrees(lon, lat, GROUND + 1),
+            ellipse: {
+              semiMinorAxis: 55,
+              semiMajorAxis: 55,
+              material: color.withAlpha(0.22),
+              outline: true,
+              outlineColor: color.withAlpha(0.45),
+              outlineWidth: 1,
+            },
+          })
+        }
+
         viewer.entities.add({
           id: `${id}-dot`,
           position: Cesium.Cartesian3.fromDegrees(lon, lat, GROUND + 6),
@@ -348,7 +452,7 @@ export default function CityMap() {
           id,
           position: Cesium.Cartesian3.fromDegrees(lon, lat, GROUND + CARD_HEIGHT),
           billboard: {
-            image: makeCard(feature.properties.name, v.value, v.label, v.color),
+            image: makeCard(feature.properties.name, v.value, v.label, v.color, cardBg),
             scale: 1 / 3,
             verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
             horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
@@ -360,6 +464,7 @@ export default function CityMap() {
 
       applyQuality('3d')
       apply()
+      setZonesReady(true)
 
       // ---- names on the city: neighbourhoods, landmarks, street names ----
       // optional file; runs in the background so a large label set never delays the camera.
@@ -389,6 +494,9 @@ export default function CityMap() {
               const [lon, lat] = f.geometry.coordinates
               items.push({ name, kind, lon, lat })
             }
+
+            // searchable straight away -- the clamp below can take a while (it waits on 3D tiles)
+            placesRef.current = items as MapPlace[]
 
             // put each label on the real surface of the 3D city, not at a guessed height
             const positions = items.map((i) => Cesium.Cartesian3.fromDegrees(i.lon, i.lat))
@@ -476,7 +584,7 @@ export default function CityMap() {
     apply()
   }
 
-  const nudge = (patch: { heading?: number; pitch?: number; range?: number }) => () => {
+  function applyNudge(patch: { heading?: number; pitch?: number; range?: number }) {
     if (animRef.current) return
     const c = camRef.current
     if (patch.heading) c.heading += patch.heading
@@ -485,16 +593,149 @@ export default function CityMap() {
     apply()
   }
 
+  function toggleSpin() {
+    const next = !spinning
+    setSpinning(next)
+    onSpinningChange?.(next)
+    // nothing else kicks off the first frame of the spin loop — request it directly
+    viewerRef.current?.scene.requestRender()
+  }
+
+  function highlightZone(zoneId: string | null) {
+    const viewer = viewerRef.current
+    if (!viewer) return
+    const prevId = highlightedZoneRef.current
+    if (prevId) {
+      const prevDot = viewer.entities.getById(`${prevId}-dot`)
+      if (prevDot?.point) {
+        prevDot.point.pixelSize = 13
+        prevDot.point.outlineWidth = 2
+      }
+    }
+    highlightedZoneRef.current = zoneId
+    if (zoneId) {
+      const dot = viewer.entities.getById(`${zoneId}-dot`)
+      if (dot?.point) {
+        dot.point.pixelSize = 22
+        dot.point.outlineWidth = 4
+      }
+    }
+    viewer.scene.requestRender()
+  }
+
+  function searchPlaces(query: string, limit = 6): MapPlace[] {
+    const q = fold(query.trim())
+    if (!q) return []
+    const scored: { place: MapPlace; rank: number }[] = []
+    for (const place of placesRef.current) {
+      const name = fold(place.name)
+      const at = name.indexOf(q)
+      if (at === -1) continue
+      // names starting with the text, then words starting with it, then anything containing it
+      const rank = at === 0 ? 0 : name[at - 1] === ' ' ? 1 : 2
+      scored.push({ place, rank })
+    }
+    return scored
+      .sort((a, b) => a.rank - b.rank || a.place.name.localeCompare(b.place.name))
+      .slice(0, limit)
+      .map((s) => s.place)
+  }
+
+  function clearPlaceMarker() {
+    const viewer = viewerRef.current
+    if (!viewer || viewer.isDestroyed()) return
+    viewer.entities.removeById('search-marker')
+    viewer.scene.requestRender()
+  }
+
+  function flyToPlace(place: MapPlace) {
+    const Cesium = cesiumRef.current
+    const viewer = viewerRef.current
+    if (!Cesium || !viewer || viewer.isDestroyed() || !centerRef.current) return
+
+    viewer.entities.removeById('search-marker')
+    viewer.entities.add({
+      id: 'search-marker',
+      position: Cesium.Cartesian3.fromDegrees(place.lon, place.lat, GROUND + 6),
+      point: {
+        pixelSize: 16,
+        color: Cesium.Color.fromCssColorString('#3B82F6'),
+        outlineColor: Cesium.Color.WHITE,
+        outlineWidth: 3,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      },
+      label: {
+        text: place.name,
+        font: '700 14px system-ui, sans-serif',
+        fillColor: Cesium.Color.WHITE,
+        outlineColor: Cesium.Color.fromBytes(0, 0, 0, 230),
+        outlineWidth: 4,
+        style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+        verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+        pixelOffset: new Cesium.Cartesian2(0, -16),
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      },
+    })
+
+    if (focus !== null) {
+      setFocus(null)
+      onFocusChangeRef.current?.(null)
+    }
+    moveTo(
+      Cesium.Cartesian3.fromDegrees(place.lon, place.lat, GROUND),
+      mode === 'map' ? MAP_VIEW.pitch : PLACE_VIEW.pitch,
+      mode === 'map' ? PLACE_VIEW.mapRange : PLACE_VIEW.range
+    )
+  }
+
+  // Exposes the same actions the built-in chrome uses, for an embedding page
+  // rendering its own controls with `hideChrome`. Re-created every render
+  // (no deps array) so it never closes over stale `mode`/`focus` state.
+  useImperativeHandle(ref, () => ({
+    nudge: applyNudge,
+    switchMode,
+    goHome,
+    toggleSpin,
+    resetNorth: () => {
+      camRef.current.heading = 0
+      apply()
+    },
+    highlightZone,
+    getHeading: () => camRef.current.heading,
+    searchPlaces,
+    flyToPlace,
+    clearPlaceMarker,
+  }))
+
   const goHome = () => {
     const Cesium = cesiumRef.current
     if (!Cesium) return
+    clearPlaceMarker()
     setFocus(null)
+    onFocusChangeRef.current?.(null)
     moveTo(
       Cesium.Cartesian3.fromDegrees(CITY.lon, CITY.lat, CITY.height),
       mode === 'map' ? MAP_VIEW.pitch : HOME.pitch,
       mode === 'map' ? MAP_VIEW.range : HOME.range
     )
   }
+
+  // Controlled fly-to from outside (e.g. a sidebar zone list). `focusZone`
+  // left as `undefined` (its default) means "uncontrolled" -- the plain
+  // `<CityMap />` usage on the homepage never runs this effect at all.
+  useEffect(() => {
+    if (focusZone === undefined) return
+    if (focusZone === null) {
+      if (focus !== null) goHome()
+      return
+    }
+    if (!zonesReady || focus === focusZone) return
+    const zone = zonesRef.current[focusZone]
+    if (!zone) return
+    setFocus(focusZone)
+    moveTo(zone.center, ZONE_VIEW.pitch, ZONE_VIEW.range, ZONE_HEADING[focusZone])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusZone, zonesReady])
 
   const btn: React.CSSProperties = {
     width: 38,
@@ -513,7 +754,11 @@ export default function CityMap() {
   const wide: React.CSSProperties = { ...btn, width: 'auto', padding: '0 16px' }
 
   return (
-    <div style={{ position: 'fixed', inset: 0 }}>
+    // 'absolute' (not 'fixed') so this fills whatever positioned container it's
+    // placed in -- a full-viewport wrapper on the homepage, or a bounded rounded
+    // panel in the Command Center. Sizes against the viewport either way when no
+    // positioned ancestor exists, so the plain `<CityMap />` homepage usage is unaffected.
+    <div style={{ position: 'absolute', inset: 0 }}>
       <div
         ref={containerRef}
         style={{ position: 'absolute', inset: 0, cursor: 'grab', touchAction: 'none' }}
@@ -524,59 +769,63 @@ export default function CityMap() {
         onWheel={onWheel}
       />
 
-      <div style={{ position: 'absolute', top: 20, left: 20, zIndex: 10, display: 'flex', gap: 8 }}>
-        <button onClick={goHome} style={wide}>
-          {focus ? '← Pamja e plotë' : 'Pamja e plotë'}
-        </button>
+      {!hideChrome && (
+        <>
+          <div style={{ position: 'absolute', top: 20, left: 20, zIndex: 10, display: 'flex', gap: 8 }}>
+            <button onClick={goHome} style={wide}>
+              {focus ? '← Pamja e plotë' : 'Pamja e plotë'}
+            </button>
 
-        <div
-          style={{
-            display: 'flex',
-            gap: 4,
-            padding: 4,
-            borderRadius: 11,
-            background: 'rgba(10,14,20,0.72)',
-            border: '1px solid rgba(255,255,255,0.18)',
-            backdropFilter: 'blur(10px)',
-          }}
-        >
-          <button
-            onClick={() => switchMode('3d')}
-            style={{ ...wide, height: 30, border: 'none', background: mode === '3d' ? 'rgba(59,130,246,0.55)' : 'transparent' }}
-          >
-            3D
-          </button>
-          <button
-            onClick={() => switchMode('map')}
-            style={{ ...wide, height: 30, border: 'none', background: mode === 'map' ? 'rgba(59,130,246,0.55)' : 'transparent' }}
-          >
-            Hartë
-          </button>
-        </div>
-      </div>
+            <div
+              style={{
+                display: 'flex',
+                gap: 4,
+                padding: 4,
+                borderRadius: 11,
+                background: 'rgba(10,14,20,0.72)',
+                border: '1px solid rgba(255,255,255,0.18)',
+                backdropFilter: 'blur(10px)',
+              }}
+            >
+              <button
+                onClick={() => switchMode('3d')}
+                style={{ ...wide, height: 30, border: 'none', background: mode === '3d' ? 'rgba(59,130,246,0.55)' : 'transparent' }}
+              >
+                3D
+              </button>
+              <button
+                onClick={() => switchMode('map')}
+                style={{ ...wide, height: 30, border: 'none', background: mode === 'map' ? 'rgba(59,130,246,0.55)' : 'transparent' }}
+              >
+                Hartë
+              </button>
+            </div>
+          </div>
 
-      <div style={{ position: 'absolute', right: 22, bottom: 60, zIndex: 10, display: 'grid', gap: 8, justifyItems: 'center' }}>
-        <button onClick={nudge({ pitch: 6 })} style={btn}>↑</button>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={nudge({ heading: -15 })} style={btn}>↺</button>
-          <button onClick={nudge({ pitch: -6 })} style={btn}>↓</button>
-          <button onClick={nudge({ heading: 15 })} style={btn}>↻</button>
-        </div>
-        <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-          <button onClick={nudge({ range: 1.25 })} style={btn}>−</button>
-          <button onClick={nudge({ range: 0.8 })} style={btn}>+</button>
-        </div>
-        <button
-          onClick={() => setSpinning((s) => !s)}
-          style={{ ...wide, marginTop: 4, background: spinning ? 'rgba(59,130,246,0.5)' : btn.background }}
-        >
-          {spinning ? '❚❚' : '▶'}
-        </button>
-      </div>
+          <div style={{ position: 'absolute', right: 22, bottom: 60, zIndex: 10, display: 'grid', gap: 8, justifyItems: 'center' }}>
+            <button onClick={() => applyNudge({ pitch: 6 })} style={btn}>↑</button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => applyNudge({ heading: -15 })} style={btn}>↺</button>
+              <button onClick={() => applyNudge({ pitch: -6 })} style={btn}>↓</button>
+              <button onClick={() => applyNudge({ heading: 15 })} style={btn}>↻</button>
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+              <button onClick={() => applyNudge({ range: 1.25 })} style={btn}>−</button>
+              <button onClick={() => applyNudge({ range: 0.8 })} style={btn}>+</button>
+            </div>
+            <button
+              onClick={toggleSpin}
+              style={{ ...wide, marginTop: 4, background: spinning ? 'rgba(59,130,246,0.5)' : btn.background }}
+            >
+              {spinning ? '❚❚' : '▶'}
+            </button>
+          </div>
 
-      <div style={{ position: 'absolute', bottom: 40, left: 20, zIndex: 10, color: 'rgba(255,255,255,0.8)', font: '400 12px system-ui, sans-serif', textShadow: '0 1px 3px rgba(0,0,0,0.9)' }}>
-        Click a zone to fly to it · Drag to rotate · Scroll to zoom
-      </div>
+          <div style={{ position: 'absolute', bottom: 40, left: 20, zIndex: 10, color: 'rgba(255,255,255,0.8)', font: '400 12px system-ui, sans-serif', textShadow: '0 1px 3px rgba(0,0,0,0.9)' }}>
+            Click a zone to fly to it · Drag to rotate · Scroll to zoom
+          </div>
+        </>
+      )}
     </div>
   )
-}
+})
