@@ -104,7 +104,7 @@ export function ModeSwitch({ mode, onSwitchMode }: { mode: "3d" | "map"; onSwitc
   const index = mode === "3d" ? 0 : 1;
 
   return (
-    <div className="bc-glass absolute top-4 left-1/2 -translate-x-1/2 z-10 rounded-[14px] p-1">
+    <div className="bc-glass absolute top-4 right-4 z-10 rounded-[14px] p-1">
       <div className="relative grid grid-cols-2">
         <span
           aria-hidden="true"

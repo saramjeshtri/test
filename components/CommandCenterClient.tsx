@@ -10,7 +10,6 @@ import KpiStrip from "./command-center/KpiStrip";
 import Panel from "./command-center/Panel";
 import ZoneList from "./command-center/ZoneList";
 import AttentionCard, { topPriorityZone } from "./command-center/AttentionCard";
-import AskBusulla from "./command-center/AskBusulla";
 import TrendChart from "./command-center/TrendChart";
 import EvidencePanel from "./command-center/EvidencePanel";
 import { MapInstrument, MapSearch, ModeSwitch } from "./command-center/MapChrome";
@@ -115,12 +114,7 @@ export default function CommandCenterClient({
             onToggleSpin={() => mapRef.current?.toggleSpin()}
           />
 
-          {/* The one deliberate exception -- a single subtle control on the
-              map, not a stack of content cards. */}
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 w-[380px] max-w-[calc(100%-32px)]">
-            <AskBusulla topZone={topZone} onAsk={(zoneId) => setSelectedZone(zoneId)} />
-          </div>
-        </div>
+                  </div>
 
         <aside className="bc-stagger order-3 lg:order-none w-full lg:w-[320px] shrink-0 lg:self-stretch lg:overflow-y-auto flex flex-col gap-4 lg:min-h-0">
           {topZone && (
