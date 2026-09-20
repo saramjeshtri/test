@@ -34,6 +34,11 @@ export const SOURCE_SHORT: Record<string, string> = {
   "5_budget_allocation.csv": "CSV · Alokimi i buxhetit",
 };
 
+/** "Excel", "CSV", "PDF" or "Legacy" -- the system a record came from, short enough for a badge. */
+export function sourceKind(file: string): string {
+  return (SOURCE_SHORT[file] ?? file).split(" · ")[0];
+}
+
 export function zoneLabel(zoneId: string | null): string {
   return zoneId ? zoneId.replace("area-", "Zona ") : "—";
 }

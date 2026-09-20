@@ -89,7 +89,7 @@ export default function KpiStrip({ data }: { data: CommandCenterData }) {
               {change.diff > 0 ? "↑" : "↓"} {Math.abs(change.diff)} {change.diff > 0 ? "më shumë" : "më pak"} se në {monthName(change.prevMonth)}
             </span>
           ) : (
-            "të regjistruara nga katër sistemet"
+            "nga të gjitha sistemet"
           )
         }
       />

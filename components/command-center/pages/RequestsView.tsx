@@ -11,6 +11,7 @@ import {
   CATEGORY_LABEL,
   PRIORITY_LABEL,
   SOURCE_SHORT,
+  sourceKind,
   zoneLabel,
   describeFlag,
   formatLeke,
@@ -204,9 +205,11 @@ export default function RequestsView({
             <X size={13} /> Pastro
           </button>
         )}
-        <span className="ml-auto text-[11.5px] bc-mono" style={{ color: "var(--bc-text-secondary)" }}>
-          {rows.length} nga {records.length} rreshta
-        </span>
+        {filtersActive && (
+          <span className="ml-auto text-[12px] bc-mono font-semibold" style={{ color: "var(--bc-text-secondary)" }} title="Rezultate / të gjitha">
+            {rows.length}/{records.length}
+          </span>
+        )}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px] items-start">
@@ -218,6 +221,7 @@ export default function RequestsView({
             <table className="w-full text-[12px]" style={{ color: "var(--bc-text)" }}>
               <thead style={{ background: "var(--bc-surface-2)", color: "var(--bc-text-secondary)" }}>
                 <tr>
+                  <th className={`${th} w-10`}>NR.</th>
                   <th className={th}>{sortHead("id", "ID")}</th>
                   <th className={th}>QYTETARI</th>
                   <th className={th}>{sortHead("zone", "ZONA")}</th>
@@ -225,11 +229,12 @@ export default function RequestsView({
                   <th className={th}>PËRSHKRIMI</th>
                   <th className={th}>{sortHead("date", "DATA")}</th>
                   <th className={th}>STATUSI</th>
+                  <th className={th}>BURIMI</th>
                   <th className={`${th} text-right`}>{sortHead("cost", "KOSTOJA")}</th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => {
+                {rows.map((r, n) => {
                   const id = `${r.source_system}#${r.request_id}#${r.source_row_ref}`;
                   const active = selectedId === id;
                   return (
@@ -242,6 +247,7 @@ export default function RequestsView({
                       className="cursor-pointer border-t transition-colors duration-150 hover:bg-[var(--bc-panel-hover)] focus-visible:bg-[var(--bc-panel-hover)]"
                       style={{ borderColor: "var(--bc-border)", background: active ? "var(--bc-panel-active)" : undefined }}
                     >
+                      <td className="px-3 py-2.5 bc-mono text-[11px]" style={{ color: "var(--bc-text-secondary)" }}>{n + 1}</td>
                       <td className="px-3 py-2.5 bc-mono" style={{ color: "var(--bc-text-secondary)" }}>{hasRealId(r) ? r.request_id : "—"}</td>
                       <td className="px-3 py-2.5 font-medium whitespace-nowrap">{r.citizen_name ?? "—"}</td>
                       <td className="px-3 py-2.5 whitespace-nowrap">{zoneLabel(r.zone_id)}</td>
@@ -251,13 +257,22 @@ export default function RequestsView({
                       </td>
                       <td className="px-3 py-2.5 bc-mono whitespace-nowrap">{r.date_submitted ?? "—"}</td>
                       <td className="px-3 py-2.5"><StatusBadge status={r.status} /></td>
+                      <td className="px-3 py-2.5 whitespace-nowrap">
+                        <span
+                          className="text-[10.5px] font-semibold px-2 py-0.5 rounded-[6px]"
+                          style={{ background: "var(--bc-surface-2)", color: "var(--bc-text-secondary)" }}
+                          title={SOURCE_SHORT[r.source_system] ?? r.source_system}
+                        >
+                          {sourceKind(r.source_system)}
+                        </span>
+                      </td>
                       <td className="px-3 py-2.5 text-right bc-mono whitespace-nowrap">{formatLeke(r.cost_estimate_leke)}</td>
                     </tr>
                   );
                 })}
                 {rows.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="px-4 py-10 text-center text-[12.5px]" style={{ color: "var(--bc-text-secondary)" }}>
+                    <td colSpan={10} className="px-4 py-10 text-center text-[12.5px]" style={{ color: "var(--bc-text-secondary)" }}>
                       Asnjë kërkesë nuk përputhet me filtrat.{" "}
                       <button onClick={clearFilters} className="font-semibold underline" style={{ color: "var(--bc-forest)" }}>
                         Pastro filtrat

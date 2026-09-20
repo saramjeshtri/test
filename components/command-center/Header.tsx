@@ -57,27 +57,25 @@ function Popover({ children, width = 288 }: { children: ReactNode; width?: numbe
 function Logo() {
   return (
     <Link href="/command-center" className="flex items-center gap-3 pr-2" aria-label="Busulla · Ballina">
-      <Image src="/brand/busulla-mark.png" alt="" width={44} height={44} priority className="rounded-[12px] shrink-0" />
+      {/* Bare artwork, no tile: the dark-mode file has the same shapes in lighter inks, and
+          globals.css shows whichever matches data-theme (set before first paint, so no flash). */}
+      <Image src="/brand/busulla-logo-light.png" alt="" width={40} height={48} priority className="bc-logo-light h-12 w-auto shrink-0" />
+      <Image src="/brand/busulla-logo-dark.png" alt="" width={40} height={48} priority className="bc-logo-dark h-12 w-auto shrink-0" />
       <span className="hidden sm:block w-px h-9 shrink-0" style={{ background: "var(--bc-border)" }} aria-hidden="true" />
-      <span className="hidden sm:flex flex-col gap-1.5">
-        <span
-          role="img"
-          aria-label="Busulla"
-          className="block h-[15px] w-[115px]"
-          style={{
-            backgroundColor: "var(--bc-text)",
-            WebkitMaskImage: "url(/brand/busulla-wordmark.png)",
-            maskImage: "url(/brand/busulla-wordmark.png)",
-            WebkitMaskSize: "contain",
-            maskSize: "contain",
-            WebkitMaskRepeat: "no-repeat",
-            maskRepeat: "no-repeat",
-          }}
-        />
-        <span className="text-[8.5px] tracking-[0.2em] leading-none" style={{ color: "var(--bc-forest)" }}>
-          ELBASAN · CITY INTELLIGENCE
-        </span>
-      </span>
+      <span
+        role="img"
+        aria-label="Busulla"
+        className="hidden sm:block h-[19px] w-[146px]"
+        style={{
+          backgroundColor: "var(--bc-text)",
+          WebkitMaskImage: "url(/brand/busulla-wordmark.png)",
+          maskImage: "url(/brand/busulla-wordmark.png)",
+          WebkitMaskSize: "contain",
+          maskSize: "contain",
+          WebkitMaskRepeat: "no-repeat",
+          maskRepeat: "no-repeat",
+        }}
+      />
     </Link>
   );
 }

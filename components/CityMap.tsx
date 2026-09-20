@@ -58,6 +58,16 @@ function makeCard(name: string, value: number, status: string, color: number[], 
 const GROUND = 100
 const CARD_HEIGHT = 520
 
+// Zone cards: the image is drawn at 3x. They used to be too small to read the zone name at the home
+// view; this is ~1.4x the old size (a further step up made neighbouring cards overlap each other).
+const CARD_SCALE = 0.31
+const CARD_NEAR = 1500
+const CARD_NEAR_SCALE = 0.75
+const CARD_FAR = 12000
+const CARD_FAR_SCALE = 0.42
+const CARD_W = 250
+const CARD_H = 104
+
 const CITY = { lon: 20.0822, lat: 41.1125, height: 120 }
 const HOME = { pitch: -32, range: 4500 }
 const ZONE_VIEW = { pitch: -38, range: 2000 }
@@ -403,6 +413,8 @@ export default forwardRef<CityMapHandle, CityMapProps>(function CityMap(
 
         zonesRef.current[id] = {
           center: Cesium.Cartesian3.fromDegrees(lon, lat, GROUND),
+          cardPosition: Cesium.Cartesian3.fromDegrees(lon, lat, GROUND + CARD_HEIGHT),
+          color,
           name: feature.properties.name,
         }
 
@@ -453,11 +465,11 @@ export default forwardRef<CityMapHandle, CityMapProps>(function CityMap(
           position: Cesium.Cartesian3.fromDegrees(lon, lat, GROUND + CARD_HEIGHT),
           billboard: {
             image: makeCard(feature.properties.name, v.value, v.label, v.color, cardBg),
-            scale: 1 / 3,
+            scale: CARD_SCALE,
             verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
             horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
             disableDepthTestDistance: Number.POSITIVE_INFINITY,
-            scaleByDistance: new Cesium.NearFarScalar(1500, 0.5, 12000, 0.28),
+            scaleByDistance: new Cesium.NearFarScalar(CARD_NEAR, CARD_NEAR_SCALE, CARD_FAR, CARD_FAR_SCALE),
           },
         })
       }
@@ -515,6 +527,8 @@ export default forwardRef<CityMapHandle, CityMapProps>(function CityMap(
               street: { font: '500 11px system-ui, sans-serif', alpha: 0.82, near: 1200, far: 2400,  lift: 12 },
             }
 
+            const placed: { label: any; position: any; chars: number; size: number }[] = []
+
             items.forEach((it, i) => {
               const s = STYLE[it.kind]
               const base = onSurface[i] ?? Cesium.Cartesian3.fromDegrees(it.lon, it.lat, GROUND)
@@ -525,7 +539,7 @@ export default forwardRef<CityMapHandle, CityMapProps>(function CityMap(
                 carto.height + s.lift
               )
 
-              viewer.entities.add({
+              const entity = viewer.entities.add({
                 position,
                 label: {
                   text: it.name,
@@ -541,6 +555,37 @@ export default forwardRef<CityMapHandle, CityMapProps>(function CityMap(
                   translucencyByDistance: new Cesium.NearFarScalar(s.near, 1.0, s.far, 0.0),
                 },
               })
+              placed.push({ label: entity.label, position, chars: it.name.length, size: parseInt(s.font.split(' ')[1], 10) })
+            })
+
+            // A name printed on top of a zone card is unreadable both ways (the card wins visually,
+            // the name turns into noise), so names whose screen box touches a card are hidden until
+            // the camera moves them apart. Only flips `show` when the answer changes.
+            const scratch = new Cesium.Cartesian2()
+            const cardScratch = new Cesium.Cartesian2()
+            viewer.scene.preRender.addEventListener(() => {
+              const cards = Object.values(zonesRef.current)
+                .map((z: any) => {
+                  const p = viewer.scene.cartesianToCanvasCoordinates(z.cardPosition, cardScratch)
+                  if (!p) return null
+                  const d = Cesium.Cartesian3.distance(viewer.camera.positionWC, z.cardPosition)
+                  const k = Math.min(Math.max((d - CARD_NEAR) / (CARD_FAR - CARD_NEAR), 0), 1)
+                  const f = CARD_NEAR_SCALE + (CARD_FAR_SCALE - CARD_NEAR_SCALE) * k
+                  const w = CARD_W * 3 * CARD_SCALE * f
+                  const h = CARD_H * 3 * CARD_SCALE * f
+                  return { x0: p.x - w / 2 - 8, x1: p.x + w / 2 + 8, y0: p.y - h - 8, y1: p.y + 8 }
+                })
+                .filter(Boolean) as { x0: number; x1: number; y0: number; y1: number }[]
+
+              for (const pl of placed) {
+                const p = viewer.scene.cartesianToCanvasCoordinates(pl.position, scratch)
+                let hide = false
+                if (p) {
+                  const half = pl.chars * pl.size * 0.3
+                  hide = cards.some((c) => p.x + half > c.x0 && p.x - half < c.x1 && p.y + pl.size / 2 > c.y0 && p.y - pl.size / 2 < c.y1)
+                }
+                if (pl.label.show !== !hide) pl.label.show = !hide
+              }
             })
           }
         } catch {
@@ -601,6 +646,54 @@ export default forwardRef<CityMapHandle, CityMapProps>(function CityMap(
     viewerRef.current?.scene.requestRender()
   }
 
+  // Marker size follows the selection: chosen zone big, the rest small, all equal when none is chosen.
+  function dotSize(zoneId: string) {
+    return focus === null ? 13 : zoneId === focus ? 22 : 10
+  }
+
+  // Choosing a zone is a whole-scene change, not just a camera move: the others recede, the
+  // chosen one gets a larger marker, a bigger card and a soft halo on the ground.
+  function styleFocus(zoneId: string | null) {
+    const Cesium = cesiumRef.current
+    const viewer = viewerRef.current
+    if (!Cesium || !viewer || viewer.isDestroyed()) return
+    viewer.entities.removeById('focus-halo')
+    for (const id of Object.keys(zonesRef.current)) {
+      const active = zoneId === id
+      const card = viewer.entities.getById(id)
+      const dot = viewer.entities.getById(`${id}-dot`)
+      const line = viewer.entities.getById(`${id}-line`)
+      if (card?.billboard) {
+        card.billboard.color = zoneId === null || active ? Cesium.Color.WHITE : Cesium.Color.WHITE.withAlpha(0.32)
+        card.billboard.scale = active ? CARD_SCALE * 1.18 : CARD_SCALE
+      }
+      if (dot?.point) {
+        dot.point.pixelSize = zoneId === null ? 13 : active ? 22 : 10
+        dot.point.outlineWidth = active ? 4 : 2
+      }
+      if (line?.polyline) line.polyline.show = zoneId === null || active
+    }
+    if (zoneId) {
+      const z = zonesRef.current[zoneId]
+      if (z) {
+        viewer.entities.add({
+          id: 'focus-halo',
+          position: z.center,
+          ellipse: {
+            semiMinorAxis: 130,
+            semiMajorAxis: 130,
+            material: z.color.withAlpha(0.2),
+            outline: true,
+            outlineColor: z.color.withAlpha(0.7),
+            outlineWidth: 2,
+            height: 0,
+          },
+        })
+      }
+    }
+    viewer.scene.requestRender()
+  }
+
   function highlightZone(zoneId: string | null) {
     const viewer = viewerRef.current
     if (!viewer) return
@@ -608,8 +701,8 @@ export default forwardRef<CityMapHandle, CityMapProps>(function CityMap(
     if (prevId) {
       const prevDot = viewer.entities.getById(`${prevId}-dot`)
       if (prevDot?.point) {
-        prevDot.point.pixelSize = 13
-        prevDot.point.outlineWidth = 2
+        prevDot.point.pixelSize = dotSize(prevId)
+        prevDot.point.outlineWidth = prevId === focus ? 4 : 2
       }
     }
     highlightedZoneRef.current = zoneId
@@ -736,6 +829,11 @@ export default forwardRef<CityMapHandle, CityMapProps>(function CityMap(
     moveTo(zone.center, ZONE_VIEW.pitch, ZONE_VIEW.range, ZONE_HEADING[focusZone])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusZone, zonesReady])
+
+  useEffect(() => {
+    if (zonesReady) styleFocus(focus)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focus, zonesReady])
 
   const btn: React.CSSProperties = {
     width: 38,

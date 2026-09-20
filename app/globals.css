@@ -123,6 +123,16 @@ body {
   box-shadow: var(--bc-shadow-float);
 }
 
+/* Nearly see-through variant, for a control that should read as part of the map itself. */
+.bc-glass-clear {
+  background: color-mix(in srgb, var(--bc-surface) 44%, transparent);
+  -webkit-backdrop-filter: blur(8px) saturate(1.2);
+  backdrop-filter: blur(8px) saturate(1.2);
+  border: 1px solid color-mix(in srgb, var(--bc-surface) 45%, transparent);
+  box-shadow: 0 6px 18px -8px rgba(0, 0, 0, 0.35);
+}
+.bc-glass-clear input::placeholder { color: var(--bc-text); opacity: 0.78; }
+
 /* Segmented controls (tabs, 3D/2D, theme): one recessed track, one raised pill. */
 .bc-seg-track {
   background: var(--bc-surface-2);
@@ -185,11 +195,29 @@ body {
   transform: scale(0.96);
 }
 
+/* Selecting a zone re-plays these (their parents are keyed by zone): a line that draws itself,
+   and text that arrives a beat after the map starts moving. */
+@keyframes bc-draw {
+  from { stroke-dashoffset: 1; }
+  to { stroke-dashoffset: 0; }
+}
+.bc-draw {
+  stroke-dasharray: 1;
+  animation: bc-draw 700ms var(--ease-out) both;
+}
+@keyframes bc-slide {
+  from { opacity: 0; transform: translateX(10px); }
+  to { opacity: 1; transform: none; }
+}
+.bc-slide { animation: bc-slide 320ms var(--ease-out) both; }
+
 /* Reduced motion: keep the gentle fades that aid comprehension, drop movement. */
 @media (prefers-reduced-motion: reduce) {
   .bc-rise { animation: bc-fade 200ms ease both; }
   .bc-pop { animation: bc-fade 120ms ease both; }
   .bc-reveal { animation: none; }
+  .bc-draw { animation: none; stroke-dasharray: none; }
+  .bc-slide { animation: bc-fade 200ms ease both; }
   .bc-press:not(:disabled):active { transform: none; }
   .animate-ping { animation: none; }
 }
@@ -220,7 +248,16 @@ button:focus-visible, input:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--bc-forest) 70%, transparent);
   outline-offset: 2px;
 }
+/* Search fields sit inside a pill that already draws its own focus border (focus-within). */
+input[role="combobox"]:focus-visible {
+  outline: none;
+}
 
 /* A section the header search just scrolled to: a soft green ring that fades out again. */
 .bc-anchor { transition: box-shadow 500ms var(--ease-out); }
 .bc-anchor.bc-flash { box-shadow: 0 0 0 3px color-mix(in srgb, var(--bc-forest) 55%, transparent), var(--bc-shadow) !important; }
+
+/* Header logo: one artwork per theme. */
+.bc-logo-dark { display: none; }
+[data-theme="dark"] .bc-logo-light { display: none; }
+[data-theme="dark"] .bc-logo-dark { display: block; }

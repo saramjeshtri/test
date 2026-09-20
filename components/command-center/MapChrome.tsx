@@ -72,7 +72,7 @@ export function MapInstrument({
 
   return (
     <div
-      className="bc-glass absolute bottom-4 left-4 z-10 flex flex-col rounded-[14px] overflow-hidden"
+      className="bc-glass absolute bottom-11 left-4 z-10 flex flex-col rounded-[14px] overflow-hidden"
     >
       <LiveCompass onResetNorth={onResetNorth} getHeading={getHeading} />
       {divider}
@@ -217,8 +217,8 @@ export function MapSearch({
   const showList = open && !picked && query.trim() !== "";
 
   return (
-    <div ref={boxRef} className="absolute top-4 left-4 z-20 w-[min(280px,calc(50%-72px))] @max-[560px]:w-[calc(100%-32px)] @max-[560px]:top-[68px]">
-      <div className="bc-glass flex items-center gap-2 h-[42px] rounded-[14px] px-3.5 focus-within:border-[var(--bc-forest)] transition-colors duration-150">
+    <div ref={boxRef} className="absolute bottom-11 left-1/2 -translate-x-1/2 z-20 w-[min(400px,calc(100%-128px))]">
+      <div className="bc-glass-clear flex items-center gap-2 h-[42px] rounded-full px-4 transition-colors duration-150 focus-within:border-[color-mix(in_srgb,var(--bc-forest)_70%,transparent)]">
         <Search size={14} className="shrink-0" style={{ color: "var(--bc-text-secondary)" }} />
         <input
           value={query}
@@ -250,8 +250,8 @@ export function MapSearch({
         <ul
           id="map-search-results"
           role="listbox"
-          className="bc-pop bc-glass mt-2 rounded-[14px] overflow-hidden py-1 max-h-[300px] overflow-y-auto"
-          style={{ transformOrigin: "top left" }}
+          className="bc-pop bc-glass absolute bottom-full left-0 right-0 mb-2 rounded-[14px] overflow-hidden py-1 max-h-[300px] overflow-y-auto"
+          style={{ transformOrigin: "bottom center" }}
         >
           {hits.length === 0 && (
             <li className="px-3.5 py-3 text-[12px]" style={{ color: "var(--bc-text-secondary)" }}>

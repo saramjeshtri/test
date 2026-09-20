@@ -66,8 +66,13 @@ export function severityDomain(scores: number[]): [number, number] {
   return [min, max];
 }
 
-export function severityLabel(score: number): string {
-  if (score >= 75) return "Kritike";
-  if (score >= 50) return "Vëmendje";
-  return "Normale";
+/** Plain-language priority of a zone *relative to the other zones* (same scale as the colors).
+ *  The absolute 0-100 score barely moves between zones in this data, so a fixed threshold would
+ *  print the same word on every row and tell the reader nothing. */
+export function severityLevel(score: number, domain: [number, number]): string {
+  const [dMin, dMax] = domain;
+  const t = (score - dMin) / (dMax - dMin || 1);
+  if (t >= 0.67) return "Prioritet i lartë";
+  if (t >= 0.34) return "Prioritet mesatar";
+  return "Prioritet i ulët";
 }

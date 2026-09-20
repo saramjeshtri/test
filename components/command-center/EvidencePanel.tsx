@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import type { CanonicalRequest } from "@/lib/fusion/schema";
-import { STATUS_LABEL, CATEGORY_LABEL, SOURCE_SHORT } from "@/lib/commandCenter/labels";
+import { STATUS_LABEL, CATEGORY_LABEL, SOURCE_SHORT, sourceKind } from "@/lib/commandCenter/labels";
 
 const STATUS_COLOR: Record<string, string> = {
   resolved: "var(--bc-st-resolved)",
@@ -54,7 +54,7 @@ export default function EvidencePanel({
     <div className="flex flex-col h-full min-h-0">
       <div className="flex items-center justify-between mb-2 text-[11px]" style={{ color: "var(--bc-text-secondary)" }}>
         <span>{selectedZone ? selectedZone.replace("area-", "Zona ") : "Të gjitha zonat"}</span>
-        <span className="bc-mono">{filtered.length} rreshta</span>
+        <span className="bc-mono font-semibold">{filtered.length}</span>
       </div>
 
       <div className="relative mb-2 shrink-0">
@@ -93,7 +93,7 @@ export default function EvidencePanel({
               {r.description ? ` · ${r.description}` : ""}
             </div>
             <div className="mt-1 flex items-center justify-between text-[9.5px] tracking-wide" style={{ color: "var(--bc-text-secondary)" }}>
-              <span className="bc-mono">{r.date_submitted ?? "pa datë"}</span>
+              <span className="bc-mono">{sourceKind(r.source_system)} · {r.date_submitted ?? "pa datë"}</span>
               <span className="font-semibold" style={{ color: STATUS_COLOR[r.status ?? ""] ?? "var(--bc-text-secondary)" }}>
                 {(r.status ? STATUS_LABEL[r.status] : "—").toUpperCase()}
               </span>
