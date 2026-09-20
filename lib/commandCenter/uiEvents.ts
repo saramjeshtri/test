@@ -2,7 +2,7 @@
  *  currently open without a full navigation: pick a zone or open a sidebar tab on the home page,
  *  or scroll to a section of the current page. */
 
-export type HomeAction = { zone?: string; tab?: "trend" | "evidence" };
+export type HomeAction = { zone?: string; tab?: "trend" | "evidence" | "plan" };
 
 const HOME_EVENT = "busulla-home-action";
 

@@ -66,14 +66,26 @@ function Kpi({
 
 /** Every card here counts requests, so the four numbers read as one set. Shares
  *  of the total live in the small line underneath, always spelled out in words. */
-export default function KpiStrip({ data }: { data: CommandCenterData }) {
+export default function KpiStrip({
+  data,
+  counts,
+}: {
+  data: CommandCenterData;
+  /** While the work plan is open: the counts it would produce. */
+  counts?: { resolved: number; inProgress: number; open: number };
+}) {
   const change = monthOverMonthChange(data.trend);
   const total = data.records.length;
   const count = (status: "resolved" | "in_progress" | "open") => data.records.filter((r) => r.status === status).length;
   const share = (n: number) => (total ? `${Math.round((n / total) * 100)}% e të gjitha kërkesave` : undefined);
-  const resolved = count("resolved");
-  const inProgress = count("in_progress");
-  const open = count("open");
+  const now = { resolved: count("resolved"), inProgress: count("in_progress"), open: count("open") };
+  const { resolved, inProgress, open } = counts ?? now;
+  // Under the plan the small line says how far each card moved instead of its share.
+  const line = (n: number, was: number) => {
+    if (!counts || n === was) return share(n);
+    const d = n - was;
+    return <span style={{ color: "var(--bc-st-progress)" }}>{d > 0 ? "+" : "−"}{Math.abs(d)} nga plani</span>;
+  };
 
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
@@ -99,7 +111,7 @@ export default function KpiStrip({ data }: { data: CommandCenterData }) {
         tone={STATUS_COLOR.resolved}
         label={STATUS_LABEL.resolved.toUpperCase()}
         value={String(resolved)}
-        context={share(resolved)}
+        context={line(resolved, now.resolved)}
       />
       <Kpi
         index={2}
@@ -107,7 +119,7 @@ export default function KpiStrip({ data }: { data: CommandCenterData }) {
         tone={STATUS_COLOR.in_progress}
         label={STATUS_LABEL.in_progress.toUpperCase()}
         value={String(inProgress)}
-        context={share(inProgress)}
+        context={line(inProgress, now.inProgress)}
       />
       <Kpi
         index={3}
@@ -115,7 +127,7 @@ export default function KpiStrip({ data }: { data: CommandCenterData }) {
         tone={STATUS_COLOR.open}
         label={STATUS_LABEL.open.toUpperCase()}
         value={String(open)}
-        context={share(open)}
+        context={line(open, now.open)}
       />
     </div>
   );

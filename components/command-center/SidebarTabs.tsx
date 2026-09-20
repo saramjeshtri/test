@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 
-export type SidebarTabId = "trend" | "evidence";
+export type SidebarTabId = "trend" | "evidence" | "plan";
 
 type Tab = { id: SidebarTabId; label: string; icon: ReactNode; content: ReactNode };
 

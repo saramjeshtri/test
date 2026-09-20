@@ -32,6 +32,7 @@ export default function InsightCard({
   selected,
   onOpenZone,
   onViewEvidence,
+  onPlan,
 }: {
   insight: Insight;
   color: string;
@@ -39,6 +40,7 @@ export default function InsightCard({
   selected: boolean;
   onOpenZone: (zoneId: string) => void;
   onViewEvidence: () => void;
+  onPlan: () => void;
 }) {
   const [why, setWhy] = useState(false);
 
@@ -80,13 +82,20 @@ export default function InsightCard({
             <span className="text-[9.5px] font-semibold tracking-[0.1em]" style={{ color: "var(--bc-text-secondary)" }}>
               REKOMANDIM
             </span>
-            <span className="flex items-center gap-3">
+            <span className="flex items-center gap-2.5">
               <button
                 onClick={onViewEvidence}
                 className="bc-press inline-flex items-center gap-0.5 text-[11px] font-semibold"
                 style={{ color: "var(--bc-forest)" }}
               >
                 Kërkesat <ArrowRight size={11} />
+              </button>
+              <button
+                onClick={onPlan}
+                className="bc-press inline-flex items-center gap-0.5 text-[11px] font-semibold"
+                style={{ color: "var(--bc-forest)" }}
+              >
+                Plani <ArrowRight size={11} />
               </button>
               <button
                 onClick={() => setWhy((w) => !w)}

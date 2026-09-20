@@ -261,3 +261,34 @@ input[role="combobox"]:focus-visible {
 .bc-logo-dark { display: none; }
 [data-theme="dark"] .bc-logo-light { display: none; }
 [data-theme="dark"] .bc-logo-dark { display: block; }
+
+/* What-if slider: a filled track and a round thumb in the brand green. */
+.bc-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  cursor: pointer;
+  background: linear-gradient(to right, var(--bc-forest) var(--fill, 0%), var(--bc-surface-2) var(--fill, 0%));
+  outline-offset: 6px;
+}
+.bc-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--bc-forest);
+  border: 3px solid var(--bc-surface);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  transition: transform 140ms var(--ease-out);
+}
+.bc-range:active::-webkit-slider-thumb { transform: scale(1.12); }
+.bc-range::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--bc-forest);
+  border: 3px solid var(--bc-surface);
+}
+.bc-range:disabled { opacity: 0.4; cursor: not-allowed; }

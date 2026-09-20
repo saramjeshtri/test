@@ -12,7 +12,7 @@ export type SearchItem = {
   /** Query string appended when navigating from another page. */
   query?: Record<string, string>;
   /** Home page only: select a zone / open a sidebar tab in place. */
-  home?: { zone?: string; tab?: "trend" | "evidence" };
+  home?: { zone?: string; tab?: "trend" | "evidence" | "plan" };
   /** Analytics page only: id of the section to scroll to. */
   section?: string;
 };
@@ -45,6 +45,7 @@ export function buildSearchIndex(zones: { zoneId: string; zoneLabel: string }[])
     })),
 
     { id: "s-trend", group: "Pjesë që nuk shihen menjëherë", label: "Trendi mujor", hint: "Përmbledhje > Trendi", keywords: "muaj grafik linje", path: HOME, query: { tab: "trend" }, home: { tab: "trend" } },
+    { id: "s-plan", group: "Pjesë që nuk shihen menjëherë", label: "Plani i veprimit (buxheti sipas zonës)", hint: "Përmbledhje > Plani: çfarë të rregullohet së pari", keywords: "buxhet plan veprimi simulator radha e punës", path: HOME, query: { tab: "plan" }, home: { tab: "plan" } },
     { id: "s-evidence", group: "Pjesë që nuk shihen menjëherë", label: "Evidenca", hint: "Përmbledhje > Evidencë: kërkesat e zonës së zgjedhur", keywords: "lista kërkesat qytetarët", path: HOME, query: { tab: "evidence" }, home: { tab: "evidence" } },
 
     { id: "a-monthly", group: "Pjesë që nuk shihen menjëherë", label: "Kërkesat sipas muajit", hint: "Analitika", keywords: "trend muaj", path: ANALYTICS, query: { focus: "monthly" }, section: "monthly" },

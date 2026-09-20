@@ -14,5 +14,5 @@ export default async function CommandCenterPage({
   const { zone, tab } = await searchParams;
   const data = loadCommandCenterData();
   const initialZone = typeof zone === "string" && data.zones.some((z) => z.zoneId === zone) ? zone : null;
-  return <CommandCenterClient data={data} initialZone={initialZone} initialTab={tab === "evidence" || tab === "trend" ? tab : undefined} />;
+  return <CommandCenterClient data={data} initialZone={initialZone} initialTab={tab === "evidence" || tab === "trend" || tab === "plan" ? tab : undefined} />;
 }

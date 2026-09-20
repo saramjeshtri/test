@@ -107,6 +107,14 @@ function easeInOut(k: number) {
   return k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2
 }
 
+/** What one zone's card, marker and pole show: same shape as public/data/values.json. */
+export interface ZoneValue {
+  areaId: string
+  value: number
+  color: number[]
+  label: string
+}
+
 export interface MapPlace {
   name: string
   kind: 'area' | 'street' | 'spot'
@@ -135,6 +143,8 @@ interface CityMapProps {
   hideChrome?: boolean
   onModeChange?: (mode: '3d' | 'map') => void
   onSpinningChange?: (spinning: boolean) => void
+  /** Fired once the zone cards and markers exist -- the earliest anything can restyle them. */
+  onZonesReady?: () => void
 }
 
 export interface CityMapHandle {
@@ -156,10 +166,13 @@ export interface CityMapHandle {
   flyToPlace: (place: MapPlace) => void
   /** Removes the marker left by flyToPlace. */
   clearPlaceMarker: () => void
+  /** Repaints every zone's card, marker and pole from these values (e.g. a what-if simulation).
+   *  Pass null to go back to the real ones. */
+  setZoneValues: (values: ZoneValue[] | null) => void
 }
 
 export default forwardRef<CityMapHandle, CityMapProps>(function CityMap(
-  { focusZone, onFocusChange, hideChrome, onModeChange, onSpinningChange }: CityMapProps = {},
+  { focusZone, onFocusChange, hideChrome, onModeChange, onSpinningChange, onZonesReady }: CityMapProps = {},
   ref
 ) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -174,10 +187,20 @@ export default forwardRef<CityMapHandle, CityMapProps>(function CityMap(
   const zonesRef = useRef<Record<string, any>>({})
   const highlightedZoneRef = useRef<string | null>(null)
   const placesRef = useRef<MapPlace[]>([])
+  const baseValuesRef = useRef<ZoneValue[]>([])
+  const cardBgRef = useRef('')
+  // Cesium keeps every image it has ever been given in one texture atlas and never frees any, so a new
+  // canvas per repaint eventually overflows it (16384 px). A card image is identified by what it shows
+  // and passed as a string: the same card is stored once however often the plan flips back to it.
+  const cardUrlCache = useRef(new Map<string, string>())
+  const paintedCardRef = useRef<Record<string, string>>({})
+
   const onFocusChangeRef = useRef(onFocusChange)
+  const onZonesReadyRef = useRef(onZonesReady)
   useEffect(() => {
     onFocusChangeRef.current = onFocusChange
-  }, [onFocusChange])
+    onZonesReadyRef.current = onZonesReady
+  }, [onFocusChange, onZonesReady])
 
   const [spinning, setSpinning] = useState(false)
   const [focus, setFocus] = useState<string | null>(null)
@@ -388,6 +411,7 @@ export default forwardRef<CityMapHandle, CityMapProps>(function CityMap(
       ])
       if (cancelled) return
 
+      baseValuesRef.current = values
       const valueById = new Map(values.map((v: any) => [v.areaId, v]))
       // Static (not animated -- the viewer only re-renders on demand, see
       // requestRenderMode above) halo under the single highest-severity
@@ -402,6 +426,7 @@ export default forwardRef<CityMapHandle, CityMapProps>(function CityMap(
       // "a panel sitting on the map" rather than a void in either theme.
       const isDarkTheme = document.documentElement.getAttribute('data-theme') === 'dark'
       const cardBg = isDarkTheme ? 'rgba(39,45,37,0.94)' : 'rgba(23,27,22,0.92)'
+      cardBgRef.current = cardBg
 
       for (const feature of areas.features) {
         const v: any = valueById.get(feature.properties.id)
@@ -646,6 +671,39 @@ export default forwardRef<CityMapHandle, CityMapProps>(function CityMap(
     viewerRef.current?.scene.requestRender()
   }
 
+  function setZoneValues(values: ZoneValue[] | null) {
+    const Cesium = cesiumRef.current
+    const viewer = viewerRef.current
+    if (!Cesium || !viewer || viewer.isDestroyed() || Object.keys(zonesRef.current).length === 0) {
+      return // not built yet; the page repaints once onZonesReady fires
+    }
+    for (const v of values ?? baseValuesRef.current) {
+      const z = zonesRef.current[v.areaId]
+      if (!z) continue
+      const color = Cesium.Color.fromBytes(v.color[0], v.color[1], v.color[2])
+      z.color = color
+      const card = viewer.entities.getById(v.areaId)
+      const dot = viewer.entities.getById(`${v.areaId}-dot`)
+      const line = viewer.entities.getById(`${v.areaId}-line`)
+      const key = `${z.name}|${v.value}|${v.label}|${v.color.join(',')}|${cardBgRef.current}`
+      if (card?.billboard && paintedCardRef.current[v.areaId] !== key) {
+        let url = cardUrlCache.current.get(key)
+        if (!url) {
+          url = makeCard(z.name, v.value, v.label, v.color, cardBgRef.current).toDataURL('image/png')
+          cardUrlCache.current.set(key, url)
+        }
+        card.billboard.image = url
+        paintedCardRef.current[v.areaId] = key
+      }
+      if (dot?.point) dot.point.color = color.withAlpha(0.95)
+      if (line?.polyline) {
+        line.polyline.material = new Cesium.PolylineGlowMaterialProperty({ glowPower: 0.25, color: color.withAlpha(0.85) })
+      }
+    }
+    styleFocus(focus) // keeps the selected zone's halo in its (possibly new) colour
+    viewer.scene.requestRender()
+  }
+
   // Marker size follows the selection: chosen zone big, the rest small, all equal when none is chosen.
   function dotSize(zoneId: string) {
     return focus === null ? 13 : zoneId === focus ? 22 : 10
@@ -798,6 +856,7 @@ export default forwardRef<CityMapHandle, CityMapProps>(function CityMap(
     searchPlaces,
     flyToPlace,
     clearPlaceMarker,
+    setZoneValues,
   }))
 
   const goHome = () => {
@@ -829,6 +888,10 @@ export default forwardRef<CityMapHandle, CityMapProps>(function CityMap(
     moveTo(zone.center, ZONE_VIEW.pitch, ZONE_VIEW.range, ZONE_HEADING[focusZone])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusZone, zonesReady])
+
+  useEffect(() => {
+    if (zonesReady) onZonesReadyRef.current?.()
+  }, [zonesReady])
 
   useEffect(() => {
     if (zonesReady) styleFocus(focus)

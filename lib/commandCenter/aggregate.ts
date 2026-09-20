@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { CanonicalRequest } from "@/lib/fusion/schema";
 import type { CanonicalBudgetRow } from "@/lib/fusion/parsers/budgetParser";
+import { scoreSeverity } from "./score";
 
 export interface ZoneStats {
   zoneId: string;
@@ -71,14 +72,7 @@ export function computeZoneStats(records: CanonicalRequest[], budgetRows: Canoni
         }
       : null;
 
-    // Explainable heuristic, not a prediction: 60% weight on how much of this
-    // zone's caseload is still open/in-progress, 40% on how much of its budget
-    // is already spent (less room left to respond). Same style of model the
-    // what-if simulator (next step) will build on -- simple, defensible, and
-    // clearly labeled as such rather than dressed up as a forecast.
-    const backlogRatio = zoneRecords.length ? (open + inProgress) / zoneRecords.length : 0;
-    const budgetPressure = budget ? budget.spentPct / 100 : 0.5;
-    const severityScore = Math.round(Math.min(100, backlogRatio * 60 + budgetPressure * 40));
+    const severityScore = scoreSeverity(open + inProgress, zoneRecords.length, budget ? budget.spentPct : null);
 
     return {
       zoneId,
