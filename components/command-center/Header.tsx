@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Home, FileText, BarChart3, Database, ChevronDown } from "lucide-react";
+import { Home, FileText, BarChart3, Bot, ChevronDown } from "lucide-react";
 import ThemeToggle from "./ThemeToggle";
 import CommandSearch from "./CommandSearch";
 
@@ -12,7 +12,7 @@ const NAV = [
   { href: "/command-center", label: "Përmbledhje", icon: Home, exact: true },
   { href: "/command-center/requests", label: "Kërkesat", icon: FileText, exact: false },
   { href: "/command-center/analytics", label: "Analitika", icon: BarChart3, exact: false },
-  { href: "/command-center/data-sources", label: "Burimet e të dhënave", icon: Database, exact: false },
+  { href: "/command-center/agent", label: "Agjenti", icon: Bot, exact: false },
 ] as const;
 
 /** Closes a popover when the user clicks anywhere else or presses Escape. */

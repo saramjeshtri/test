@@ -31,7 +31,7 @@ export function buildSearchIndex(zones: { zoneId: string; zoneLabel: string }[])
     { id: "p-home", group: "Faqe", label: "Përmbledhje", hint: "Hartë, zona dhe pamja e përgjithshme", keywords: "kryefaqja ballina home", path: HOME },
     { id: "p-requests", group: "Faqe", label: "Kërkesat", hint: "Tabela e plotë e kërkesave të qytetarëve", keywords: "tabela ankesat", path: REQUESTS },
     { id: "p-analytics", group: "Faqe", label: "Analitika", hint: "Grafikët dhe krahasimet", keywords: "grafik statistika raporte", path: ANALYTICS },
-    { id: "p-sources", group: "Faqe", label: "Burimet e të dhënave", hint: "Nga vijnë të dhënat dhe sa janë të plota", keywords: "excel csv pdf sisteme", path: "/command-center/data-sources" },
+    { id: "p-agent", group: "Faqe", label: "Agjenti", hint: "Pyet qytetin: përgjigje me burime", keywords: "chat pyetje asistent ai bisedë", path: "/command-center/agent" },
 
     ...zones.map<SearchItem>((z) => ({
       id: `z-${z.zoneId}`,

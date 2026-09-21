@@ -36,9 +36,10 @@ Check `package.json` for typecheck, lint, and build scripts and run the ones tha
 
 - `app/layout.tsx`: root layout, fonts, theme init script
 - `app/page.tsx`: home route
-- `app/command-center/`: the dashboard. `page.tsx` (overview), `analytics/`, `data-sources/`, `requests/`
+- `app/command-center/`: the dashboard. `page.tsx` (overview), `analytics/`, `agent/` (the chat agent), `requests/`
 - `components/`: UI components, including `CityMap.tsx`
 - `lib/commandCenter/aggregate.ts`: `loadCommandCenterData()` reads the canonical output on the server and builds the dashboard data
+- `app/api/agent/route.ts` and `lib/agent/`: the agent. A loop (`agent.ts`) where a language model (`gemini.ts`, or the key-less `offline.ts`) calls read-only tools (`tools.ts`) over the canonical data; answers cite requests by short refs. `scripts/test-agent.ts` checks it without a key or a network. Optional env vars: `GEMINI_API_KEY`, `GEMINI_MODEL`, `GEMINI_EMBEDDING_MODEL`.
 - `scripts/run-fusion.ts`: runs the fusion pipeline over `fixtures/` and writes `fixtures/canonical-output/`
 - `fixtures/`: synthetic source files, the budget CSV, and the generated `canonical-output/`
 
@@ -82,7 +83,7 @@ Rules:
 ## Definition of done
 
 - Typecheck and lint pass (whichever scripts exist)
-- `/command-center` and its three subpages load with no errors in the terminal
+- `/command-center` and its subpages (requests, analytics, agent) load with no errors in the terminal
 - UI changes look right in both light and dark themes
 - `git diff --stat` reviewed, with a short summary of what changed and why
 
